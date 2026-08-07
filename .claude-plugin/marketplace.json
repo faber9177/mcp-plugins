@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "faber-mcp-plugins",
+  "owner": {
+    "name": "Faber"
+  },
+  "description": "Official Faber plugins for Claude Code and Claude Cowork.",
+  "plugins": [
+    {
+      "name": "faber-claude-code",
+      "source": "./plugins/faber-claude-code",
+      "description": "Publish and recall Faber artifacts with local queueing and knowledge capture.",
+      "category": "Productivity",
+      "tags": ["artifacts", "knowledge", "mcp"]
+    },
+    {
+      "name": "faber-cowork",
+      "source": "./plugins/faber-cowork",
+      "description": "Publish and recall Faber artifacts from Claude Cowork.",
+      "category": "Productivity",
+      "tags": ["artifacts", "knowledge", "mcp"]
+    }
+  ]
+}

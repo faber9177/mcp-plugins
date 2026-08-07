@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "Evaluate whether this Cowork task may stop. Inspect $ARGUMENTS and the conversation. Return {\"ok\": false, \"reason\": \"Finish the requested Faber publish or clearly report why it could not be completed.\"} only when the user explicitly requested a Faber publish and that request is still unfinished. Return {\"ok\": true} when no publish was requested, it completed, the user declined it, or a failure was already clearly reported. Do not require work the user did not request.",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

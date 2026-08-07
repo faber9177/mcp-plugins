@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "faber": {
+      "type": "http",
+      "url": "https://www.getfaber.app/mcp",
+      "headers": {
+        "X-Faber-Product": "claude-cowork",
+        "X-Faber-Product-Version": "0.1.1"
+      }
+    }
+  }
+}

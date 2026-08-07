@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "faber-claude-code",
+  "version": "0.1.1",
+  "displayName": "Faber for Claude Code",
+  "description": "Publish and recall Faber artifacts with local queueing and knowledge capture.",
+  "author": {
+    "name": "Faber"
+  },
+  "repository": "https://github.com/faber9177/mcp-plugins",
+  "homepage": "https://www.getfaber.app",
+  "keywords": [
+    "artifacts",
+    "knowledge",
+    "mcp",
+    "publishing",
+    "context"
+  ],
+  "mcpServers": {
+    "faber": {
+      "command": "sh",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/scripts/launch-companion.sh",
+        "mcp"
+      ]
+    }
+  }
+}
