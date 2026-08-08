@@ -25,6 +25,21 @@ spec.loader.exec_module(pull_candidate)
 
 
 class CandidatePullTests(unittest.TestCase):
+    def test_publishing_workflow_is_limited_to_canonical_main(self) -> None:
+        workflow = Path(__file__).parents[1].joinpath(
+            ".github/workflows/pull-candidate.yml"
+        ).read_text()
+        self.assertIn("name: Faber plugin mirror", workflow)
+        self.assertIn("Validate mirror changes:", workflow)
+        self.assertIn("Pull trusted candidate from getfaber.app", workflow)
+        self.assertIn(
+            "if: github.event_name != 'pull_request' && "
+            "github.repository == 'faber9177/mcp-plugins' && "
+            "github.ref == 'refs/heads/main'",
+            workflow,
+        )
+        self.assertNotRegex(workflow, r"(?m)^\s*push:\s*$")
+
     def test_candidate_origin_requires_https_except_for_loopback(self) -> None:
         self.assertTrue(pull_candidate.allowed_origin("https://www.getfaber.app"))
         self.assertTrue(pull_candidate.allowed_origin("http://127.0.0.1:3000"))
