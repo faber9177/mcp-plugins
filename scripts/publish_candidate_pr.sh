@@ -3,7 +3,7 @@ set -euo pipefail
 
 version="${1:-}"
 candidate_id="${2:-}"
-repository="${GITHUB_REPOSITORY:-faber9177/mcp-plugins}"
+repository="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
 expected_author="github-actions[bot]"
 expected_author_id="41898282"
 

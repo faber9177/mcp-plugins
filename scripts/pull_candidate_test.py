@@ -34,10 +34,11 @@ class CandidatePullTests(unittest.TestCase):
         self.assertIn("Pull trusted candidate from getfaber.app", workflow)
         self.assertIn(
             "if: github.event_name != 'pull_request' && "
-            "github.repository == 'faber9177/mcp-plugins' && "
+            "github.repository_id == '1327095477' && "
             "github.ref == 'refs/heads/main'",
             workflow,
         )
+        self.assertNotIn("github.repository ==", workflow)
         self.assertNotRegex(workflow, r"(?m)^\s*push:\s*$")
 
     def test_candidate_origin_requires_https_except_for_loopback(self) -> None:
