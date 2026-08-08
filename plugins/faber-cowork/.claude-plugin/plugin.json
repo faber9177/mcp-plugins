@@ -1,13 +1,13 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "faber-cowork",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "displayName": "Faber for Cowork",
   "description": "Publish and recall Faber artifacts from Claude Cowork.",
   "author": {
     "name": "Faber"
   },
-  "repository": "https://github.com/faber9177/mcp-plugins",
+  "repository": "https://github.com/getfaber/mcp-plugins",
   "homepage": "https://www.getfaber.app",
   "keywords": [
     "artifacts",
