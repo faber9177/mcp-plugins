@@ -24,4 +24,5 @@ fi
 
 export FABER_PRODUCT=claude-code
 export FABER_PRODUCT_VERSION=$version
+export FABER_MCP_TOOL_CATALOG="$plugin_root/tools/catalog.json"
 exec "$companion" "$@"
