@@ -27,10 +27,10 @@ pass both `derived_from` and `derived_from_version`.
 
 ### Publishing by file reference
 
-Publish one regular UTF-8 file of at most 5 MiB. An explicit request to publish
-establishes consent for that artifact, so do not ask for another Faber-specific
+Publish one regular UTF-8 file. An explicit request to publish establishes
+consent for that artifact, so do not ask for another Faber-specific
 confirmation. Publishing remains an external write in native host approval UI;
-do not suppress that approval or obscure the referenced path.
+do not suppress that approval.
 
 On Claude Code, put a newly generated artifact in an owner-only
 `~/.faber/staging` directory, write it exactly once, and call
@@ -42,12 +42,11 @@ explain that it must be moved into the workspace before Faber can publish it.
 If several files plausibly match, show concise relative paths and ask the user
 which one they mean. Never send the artifact body in an MCP argument.
 
-On Cowork, write the artifact once in the Cowork workspace, call
-`faber_prepare_artifact_upload`, and upload the exact file bytes with an HTTP
-`PUT` to the returned `upload_url` using the returned `Authorization:
-Faber-Upload <capability>` header. Then call `faber_publish_artifact` with the
-returned `upload_id`. Treat the capability as a secret and never quote it in a
-user-facing message.
+On Cowork, read the completed UTF-8 artifact and call
+`faber_publish_artifact` once with its exact source in `content`. Inline
+artifact content is limited to 1 MiB of UTF-8 bytes. If it is larger, recommend
+a companion-backed Faber surface or the Faber web app instead of truncating or
+splitting it without the user's direction.
 
 Do not publish directories, symlinks, credential locations, or files containing
 secrets. Self-contained HTML is the default; other single-file text artifacts
@@ -82,8 +81,7 @@ user to paste an API key.
 
 Before publishing, Faber checks the account's available workspaces. When there
 is more than one, ask which named workspace should receive the artifact and
-retry the publish preparation or publish call with the exact displayed name in
+retry the publish call with the exact displayed name in
 `workspace_name`. If Faber reports duplicate names, ask which listed slug the
-user means and use `workspace_slug` instead. Preserve the same selector from
-Cowork upload preparation through the final publish call. Never choose a
-workspace on the user's behalf.
+user means and use `workspace_slug` instead. Never choose a workspace on the
+user's behalf.
