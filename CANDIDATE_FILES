@@ -1,0 +1,70 @@
+{
+  "format_version": 1,
+  "files": [
+    {
+      "path": ".claude-plugin/marketplace.json",
+      "mode": "0644",
+      "version_stamped": false
+    },
+    {
+      "path": "plugins/faber-claude-code/.claude-plugin/plugin.json",
+      "mode": "0644",
+      "version_stamped": true
+    },
+    {
+      "path": "plugins/faber-claude-code/bin/faber-companion_darwin_amd64",
+      "mode": "0755",
+      "version_stamped": false
+    },
+    {
+      "path": "plugins/faber-claude-code/bin/faber-companion_darwin_arm64",
+      "mode": "0755",
+      "version_stamped": false
+    },
+    {
+      "path": "plugins/faber-claude-code/bin/faber-companion_linux_amd64",
+      "mode": "0755",
+      "version_stamped": false
+    },
+    {
+      "path": "plugins/faber-claude-code/bin/faber-companion_linux_arm64",
+      "mode": "0755",
+      "version_stamped": false
+    },
+    {
+      "path": "plugins/faber-claude-code/hooks/hooks.json",
+      "mode": "0644",
+      "version_stamped": false
+    },
+    {
+      "path": "plugins/faber-claude-code/scripts/launch-companion.sh",
+      "mode": "0755",
+      "version_stamped": false
+    },
+    {
+      "path": "plugins/faber-claude-code/skills/faber/SKILL.md",
+      "mode": "0644",
+      "version_stamped": false
+    },
+    {
+      "path": "plugins/faber-cowork/.claude-plugin/plugin.json",
+      "mode": "0644",
+      "version_stamped": true
+    },
+    {
+      "path": "plugins/faber-cowork/.mcp.json",
+      "mode": "0644",
+      "version_stamped": true
+    },
+    {
+      "path": "plugins/faber-cowork/hooks/hooks.json",
+      "mode": "0644",
+      "version_stamped": false
+    },
+    {
+      "path": "plugins/faber-cowork/skills/faber/SKILL.md",
+      "mode": "0644",
+      "version_stamped": false
+    }
+  ]
+}
