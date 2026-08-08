@@ -5,6 +5,20 @@ version="${1:-}"
 candidate_id="${2:-}"
 repository="${GITHUB_REPOSITORY:-faber9177/mcp-plugins}"
 expected_author="github-actions[bot]"
+expected_author_id="41898282"
+
+verify_actions_author() {
+  local number="$1"
+  local description="$2"
+  local identity
+  identity="$(gh api "repos/$repository/pulls/$number")"
+  [[ "$(jq -r .user.login <<< "$identity")" == "$expected_author" \
+    && "$(jq -r .user.type <<< "$identity")" == Bot \
+    && "$(jq -r .user.id <<< "$identity")" == "$expected_author_id" ]] || {
+    echo "$description was not created by $expected_author" >&2
+    return 1
+  }
+}
 
 [[ "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || {
   echo "release version must be stable SemVer" >&2
@@ -38,13 +52,10 @@ while IFS= read -r open_branch; do
 done <<< "$open_releases"
 
 pr="$(gh pr list --state open --head "$branch" \
-  --json number,isDraft,author,baseRefName,headRefName,headRepository \
+  --json number,isDraft,baseRefName,headRefName,headRepository \
   --jq '.[0] // empty')"
 if [[ -n "$pr" ]]; then
-  [[ "$(jq -r .author.login <<< "$pr")" == "$expected_author" ]] || {
-    echo "Existing release PR was not created by $expected_author" >&2
-    exit 1
-  }
+  verify_actions_author "$(jq -r .number <<< "$pr")" "Existing release PR"
   [[ "$(jq -r .baseRefName <<< "$pr")" == main ]] || {
     echo "Existing release PR does not target main" >&2
     exit 1
@@ -107,12 +118,9 @@ else
 fi
 
 pr="$(gh pr view "$branch" \
-  --json number,isDraft,author,baseRefName,headRefName,headRefOid,headRepository)"
+  --json number,isDraft,baseRefName,headRefName,headRefOid,headRepository)"
 number="$(jq -r .number <<< "$pr")"
-[[ "$(jq -r .author.login <<< "$pr")" == "$expected_author" ]] || {
-  echo "Generated release PR was not created by $expected_author" >&2
-  exit 1
-}
+verify_actions_author "$number" "Generated release PR"
 [[ "$(jq -r .baseRefName <<< "$pr")" == main ]] || {
   echo "Generated release PR does not target main" >&2
   exit 1
@@ -152,9 +160,8 @@ fi
 mergeable="UNKNOWN"
 for _ in $(seq 1 15); do
   merge_check="$(gh pr view "$number" \
-    --json author,baseRefName,headRefName,headRefOid,headRepository,mergeable)"
-  [[ "$(jq -r .author.login <<< "$merge_check")" == "$expected_author" \
-    && "$(jq -r .baseRefName <<< "$merge_check")" == main \
+    --json baseRefName,headRefName,headRefOid,headRepository,mergeable)"
+  [[ "$(jq -r .baseRefName <<< "$merge_check")" == main \
     && "$(jq -r .headRefName <<< "$merge_check")" == "$branch" \
     && "$(jq -r .headRefOid <<< "$merge_check")" == "$head_sha" \
     && "$(jq -r .headRepository.nameWithOwner <<< "$merge_check")" == "$repository" ]] || {
@@ -169,6 +176,7 @@ done
   echo "Generated release PR is not mergeable: $mergeable" >&2
   exit 1
 }
+verify_actions_author "$number" "Generated release PR"
 
 response="$(gh api --method PUT "repos/$repository/pulls/$number/merge" \
   -f sha="$head_sha" \

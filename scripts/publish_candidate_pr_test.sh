@@ -66,8 +66,14 @@ case "$*" in
     if [ -n "${FAKE_VIEW:-}" ]; then
       printf '%s' "$FAKE_VIEW"
     else
-      printf '{"number":7,"isDraft":true,"author":{"login":"github-actions[bot]"},"baseRefName":"main","headRefName":"release/v%s","headRefOid":"%s","headRepository":{"nameWithOwner":"faber9177/mcp-plugins"},"mergeable":"MERGEABLE"}' "$FAKE_VERSION" "$FAKE_HEAD_SHA"
+      printf '{"number":7,"isDraft":true,"author":{"login":"app/github-actions"},"baseRefName":"main","headRefName":"release/v%s","headRefOid":"%s","headRepository":{"nameWithOwner":"faber9177/mcp-plugins"},"mergeable":"MERGEABLE"}' "$FAKE_VERSION" "$FAKE_HEAD_SHA"
     fi
+    ;;
+  "api repos/faber9177/mcp-plugins/pulls/7")
+    printf '{"user":{"login":"%s","type":"%s","id":%s}}' \
+      "${FAKE_AUTHOR_LOGIN:-github-actions[bot]}" \
+      "${FAKE_AUTHOR_TYPE:-Bot}" \
+      "${FAKE_AUTHOR_ID:-41898282}"
     ;;
   "api --method PUT "*)
     printf '%s' "${FAKE_MERGE_RESPONSE:-{\"merged\":true}}"
@@ -127,13 +133,18 @@ assert_rejected() {
 assert_rejected conflict 'Another plugin release PR is already open' \
   FAKE_OPEN_RELEASES=release/v9.9.9
 
-human_pr="$(printf '{"number":7,"isDraft":true,"author":{"login":"human"},"baseRefName":"main","headRefName":"%s","headRepository":{"nameWithOwner":"faber9177/mcp-plugins"}}' "$branch")"
+human_pr="$(printf '{"number":7,"isDraft":true,"author":{"login":"app/github-actions"},"baseRefName":"main","headRefName":"%s","headRepository":{"nameWithOwner":"faber9177/mcp-plugins"}}' "$branch")"
 assert_rejected human-pr 'was not created by github-actions[bot]' \
-  FAKE_OPEN_RELEASES="$branch" FAKE_PR="$human_pr"
+  FAKE_OPEN_RELEASES="$branch" FAKE_PR="$human_pr" FAKE_AUTHOR_LOGIN=human
 if grep -Fq 'git push' "$log"; then
   echo "publisher pushed a human-owned release PR" >&2
   exit 1
 fi
+
+assert_rejected wrong-bot-id 'was not created by github-actions[bot]' \
+  FAKE_OPEN_RELEASES="$branch" FAKE_PR="$human_pr" FAKE_AUTHOR_ID=1
+assert_rejected wrong-bot-type 'was not created by github-actions[bot]' \
+  FAKE_OPEN_RELEASES="$branch" FAKE_PR="$human_pr" FAKE_AUTHOR_TYPE=User
 
 wrong_base_pr="$(printf '{"number":7,"isDraft":true,"author":{"login":"github-actions[bot]"},"baseRefName":"other","headRefName":"%s","headRepository":{"nameWithOwner":"faber9177/mcp-plugins"}}' "$branch")"
 assert_rejected wrong-base 'does not target main' \
