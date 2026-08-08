@@ -5,7 +5,7 @@
       "url": "https://www.getfaber.app/mcp",
       "headers": {
         "X-Faber-Product": "claude-cowork",
-        "X-Faber-Product-Version": "0.1.2"
+        "X-Faber-Product-Version": "0.1.3"
       }
     }
   }
