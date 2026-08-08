@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "faber-cowork",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "displayName": "Faber for Cowork",
   "description": "Publish and recall Faber artifacts from Claude Cowork.",
   "author": {

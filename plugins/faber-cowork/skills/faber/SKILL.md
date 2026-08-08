@@ -13,8 +13,8 @@ Use Faber as a durable artifact library for knowledge your team can reuse.
 2. Shape the HTML around the work itself: lead with a clear title and short orientation, then use a strong heading hierarchy, concise sections, and the most useful evidence, decisions, outcomes, and next steps. Preserve all substantive facts; never invent results or hide important caveats just to improve presentation.
 3. Use semantic HTML (`header`, `main`, `nav`, `aside`, `section`, headings, lists, tables, and code blocks) and tasteful inline styling when it improves comprehension. Add anchored navigation when the report has enough sections to benefit from it; omit it for short artifacts. Make navigation collapse or stack naturally on narrow screens.
 4. Optimize for a calm, high-signal reading experience: meaningful whitespace, readable typography, accessible contrast, restrained color, clear callouts for risks or decisions, scannable summaries, and responsive layouts. Use tables, timelines, diagrams, or comparisons when they clarify the material.
-5. Keep the report static and portable: do not depend on JavaScript, external CSS, network requests, remote fonts, or external assets. Never put secrets, raw transcripts, or private session details in the artifact or capsule.
-6. Create a KnowledgeCapsule v1 with non-empty `Outcome`, `Decisions and Rationale`, `Reusable Knowledge`, and `Verification` headings.
+5. Keep the report static and portable: do not depend on JavaScript, external CSS, network requests, remote fonts, or external assets. Never put secrets, raw transcripts, or private session details in the artifact or private session knowledge.
+6. Provide private session knowledge with non-empty `Outcome`, `Decisions and Rationale`, `Reusable Knowledge`, and `Verification` headings.
 7. Publish through the product-specific file flow below. Reports are private to the publishing user by default.
 
 When the user provides a Faber artifact URL, fetch it with
@@ -34,7 +34,8 @@ do not suppress that approval.
 
 On Claude Code, put a newly generated artifact in an owner-only
 `~/.faber/staging` directory, write it exactly once, and call
-`faber_publish_artifact` with its absolute path in `content_ref`. For an
+`faber_publish_artifact` with its absolute path in `content_ref`. Faber accepts
+the file for reliable background delivery. For an
 existing artifact that the user identifies by name or path, resolve and pass
 the absolute path directly when it is inside the active workspace. Do not copy,
 rewrite, or delete the existing file. If it is outside the active workspace,
@@ -45,8 +46,8 @@ which one they mean. Never send the artifact body in an MCP argument.
 On Cowork, read the completed UTF-8 artifact and call
 `faber_publish_artifact` once with its exact source in `content`. Inline
 artifact content is limited to 1 MiB of UTF-8 bytes. If it is larger, recommend
-a companion-backed Faber surface or the Faber web app instead of truncating or
-splitting it without the user's direction.
+the Faber web app instead of truncating or splitting it without the user's
+direction.
 
 Do not publish directories, symlinks, credential locations, or files containing
 secrets. Self-contained HTML is the default; other single-file text artifacts
