@@ -47,6 +47,11 @@
       "version_stamped": false
     },
     {
+      "path": "plugins/faber-claude-code/tools/catalog.json",
+      "mode": "0644",
+      "version_stamped": false
+    },
+    {
       "path": "plugins/faber-cowork/.claude-plugin/plugin.json",
       "mode": "0644",
       "version_stamped": true

@@ -1,0 +1,271 @@
+{
+  "client": "claude-code",
+  "instructions": "This server targets hosted Faber. Unqualified references to Faber mean this destination. For a report or document, default to a polished, self-contained static HTML artifact unless the user requests another format. Make HTML easy to read: lead with a clear title and short orientation; use semantic HTML and a clear heading hierarchy; use responsive layout; and include a compact sidebar in every artifact (anchored navigation for multi-section reports, or a concise context/summary panel for short ones). Preserve substantive facts and caveats. Keep artifacts portable and private: do not use JavaScript, external CSS, network requests, remote fonts, or external assets, and never include secrets, raw transcript text, or private session details. These HTML and sidebar guidelines do not apply to code, datasets, or an explicitly requested alternate format.",
+  "tools": [
+    {
+      "name": "faber_context",
+      "title": "Get grounding context for a task",
+      "description": "Assemble a grounding pack for a task you're about to perform: the team's relevant prior artifacts, decisions, skills, and conventions. Call this at the START of a substantive task (building, writing, designing, debugging) with a one-line task description. Apply any recalled skills/conventions to your work, and save the result back to Faber with derived_from lineage.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "task": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 1000,
+            "description": "What you're about to do, in one line."
+          }
+        },
+        "required": [
+          "task"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "faber_get_artifact",
+      "title": "Get artifact source from Faber",
+      "description": "Fetch one accessible version of a Faber artifact with its source and shareable provenance. Private capsule and transcript evidence are never returned. Use update_of when revising the same artifact and derived_from for distinct work.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Artifact ID from faber_search or a Faber URL."
+          },
+          "version": {
+            "description": "Specific version; omit for current.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "faber_mark_used",
+      "title": "Record artifact reuse",
+      "description": "Record that an accessible Faber artifact materially influenced the current work.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "artifact_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "artifact_id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "faber_publish_artifact",
+      "title": "Publish artifact to Faber hosted",
+      "description": "Publish an artifact by reference to Faber hosted when the user prompts you to publish it. For a report or document, default to a polished, self-contained static HTML artifact unless the user requests another format. Make HTML easy to read: lead with a clear title and short orientation; use semantic HTML and a clear heading hierarchy; use responsive layout; and include a compact sidebar in every artifact (anchored navigation for multi-section reports, or a concise context/summary panel for short ones). Preserve substantive facts and caveats. Keep artifacts portable and private: do not use JavaScript, external CSS, network requests, remote fonts, or external assets, and never include secrets, raw transcript text, or private session details. These HTML and sidebar guidelines do not apply to code, datasets, or an explicitly requested alternate format. Never send the artifact body inline: pass the absolute artifact path in content_ref. upload_id is reserved for the companion's encrypted queue. Reports are private to the publishing user by default. If Faber reports multiple workspaces, ask the user which named workspace should receive this artifact and retry with workspace_name; use workspace_slug only when Faber reports duplicate names. Otherwise do not ask for a separate approval step. To amend an existing report after a later prompt, fetch its source and pass update_of so Faber appends an immutable version.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "content_ref": {
+            "description": "Absolute path to one local UTF-8 artifact file. The Faber companion snapshots and uploads it outside the model context.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          },
+          "upload_id": {
+            "description": "Internal reference prepared by the Faber companion while draining its encrypted queue.",
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "title": {
+            "description": "Short human title. Omit to let Faber name it.",
+            "type": "string",
+            "maxLength": 300
+          },
+          "type": {
+            "description": "Product class describing what the artifact is. Defaults to document.",
+            "type": "string",
+            "enum": [
+              "document",
+              "code",
+              "application",
+              "agent",
+              "dataset",
+              "prompt",
+              "diagram",
+              "other"
+            ]
+          },
+          "distilled_knowledge": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 262144,
+            "description": "Required private KnowledgeCapsule v1 Markdown with non-empty Outcome, Decisions and Rationale, Reusable Knowledge, and Verification headings."
+          },
+          "model": {
+            "description": "Exact generating model id when known.",
+            "type": "string",
+            "maxLength": 200
+          },
+          "conversation_ref": {
+            "description": "URL or opaque id of the originating conversation.",
+            "type": "string",
+            "maxLength": 1000
+          },
+          "session_ref": {
+            "description": "Stable session id when available.",
+            "type": "string",
+            "maxLength": 200
+          },
+          "external_ref": {
+            "description": "Stable client id for this artifact so later saves append versions.",
+            "type": "string",
+            "maxLength": 500
+          },
+          "update_of": {
+            "description": "Faber artifact id when the user asks to amend the same report.",
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "derived_from": {
+            "description": "Parent artifact id when this is distinct work derived from prior work.",
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "workspace_name": {
+            "description": "Exact workspace name selected by the user when Faber asks where to publish.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "workspace_slug": {
+            "description": "Workspace slug selected only when Faber reports duplicate workspace names.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "idempotency_key": {
+            "description": "Internal stable publish key supplied by the Faber companion for safe retrying.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "distilled_knowledge"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "faber_publish_status",
+      "title": "Check queued Faber delivery",
+      "description": "Check whether a queued artifact publish has reached Faber.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "queue_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$",
+            "description": "Queue id returned by faber_publish_artifact."
+          }
+        },
+        "required": [
+          "queue_id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "faber_recall",
+      "title": "Recall the team's knowledge",
+      "description": "Retrieve the team's most relevant saved knowledge (docs, decisions, skills, pipelines, dashboards) for a topic BEFORE you start working on it. Returns grounding context — summaries + relevant excerpts + artifact ids — not just links. Use it to avoid re-deriving what the team already knows, follow existing conventions, and cite prior work. If you build on a recalled artifact, pass its id as derived_from when saving.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 1000,
+            "description": "The topic or question to ground on, in natural language."
+          },
+          "k": {
+            "default": 6,
+            "description": "Max items.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "faber_search",
+      "title": "Search the Faber library",
+      "description": "Search the team's library of saved AI artifacts. Use this BEFORE generating something the team may already have — dashboards, components, docs — and to find an artifact the user refers to by name or topic.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "description": "What to look for, in natural language."
+          },
+          "limit": {
+            "default": 5,
+            "description": "Max results.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    }
+  ]
+}
