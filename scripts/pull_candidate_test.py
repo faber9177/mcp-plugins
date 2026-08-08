@@ -5,6 +5,8 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+import shutil
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -23,6 +25,18 @@ spec.loader.exec_module(pull_candidate)
 
 
 class CandidatePullTests(unittest.TestCase):
+    def test_publishing_workflow_is_limited_to_canonical_main(self) -> None:
+        workflow = Path(__file__).parents[1].joinpath(
+            ".github/workflows/pull-candidate.yml"
+        ).read_text()
+        self.assertIn(
+            "if: github.event_name != 'pull_request' && "
+            "github.repository == 'faber9177/mcp-plugins' && "
+            "github.ref == 'refs/heads/main'",
+            workflow,
+        )
+        self.assertNotRegex(workflow, r"(?m)^\s*push:\s*$")
+
     def test_candidate_origin_requires_https_except_for_loopback(self) -> None:
         self.assertTrue(pull_candidate.allowed_origin("https://www.getfaber.app"))
         self.assertTrue(pull_candidate.allowed_origin("http://127.0.0.1:3000"))
@@ -33,301 +47,361 @@ class CandidatePullTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             pull_candidate.next_patch("0.1.1-beta")
 
-    def test_manifest_rejects_private_metadata_fields(self) -> None:
+    def test_manifest_and_checksum_are_verified(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            manifest = {
-                "candidate_id": "a" * 64,
-                "format_version": 1,
-                "source_revision": "private",
-            }
-            root.joinpath("candidate.json").write_text(json.dumps(manifest))
-            root.joinpath("candidate.tar.gz").write_bytes(b"archive")
-            lines = []
-            for name in ("candidate.json", "candidate.tar.gz"):
-                digest = hashlib.sha256(root.joinpath(name).read_bytes()).hexdigest()
-                lines.append(f"{digest}  {name}\n")
-            root.joinpath("SHA256SUMS").write_text("".join(lines))
+            candidate_id = "a" * 64
+            self._write_downloads(root, candidate_id, b"archive")
+            self.assertEqual(
+                pull_candidate.verify_downloads(root)["candidate_id"], candidate_id
+            )
+            root.joinpath("candidate.tar.gz").write_bytes(b"changed")
             with self.assertRaises(SystemExit):
                 pull_candidate.verify_downloads(root)
 
-    def test_archive_rejects_links_and_traversal(self) -> None:
-        for name, member in (
-            ("link", self._link_member()),
-            ("traversal", self._file_member("../private")),
-        ):
+    def test_manifest_rejects_untrusted_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self._write_downloads(root, "a" * 64, b"archive")
+            manifest = json.loads(root.joinpath("candidate.json").read_text())
+            manifest["source_revision"] = "private"
+            root.joinpath("candidate.json").write_text(json.dumps(manifest))
+            self._write_checksums(root)
+            with self.assertRaises(SystemExit):
+                pull_candidate.verify_downloads(root)
+
+    def test_archive_accepts_future_client_and_opaque_catalog_metadata(self) -> None:
+        files = {
+            ".claude-plugin/marketplace.json": (b"{}", 0o644),
+            "plugins/faber-gemini/tools/catalog.json": (
+                b'{"client":"gemini-cli","instructions":"use Faber","tools":[]}',
+                0o644,
+            ),
+            "plugins/faber-codex/bin/launcher": (b"binary", 0o755),
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive = root / "candidate.tar.gz"
+            self._write_archive(archive, files)
+            payload = root / "payload"
+            extracted = pull_candidate.extract_safely(archive, payload)
+            candidate_id = pull_candidate.candidate_digest(
+                {path: content for path, (content, _mode) in files.items()}
+            )
+            pull_candidate.verify_payload(payload, candidate_id, extracted)
+            self.assertEqual(extracted["plugins/faber-codex/bin/launcher"], 0o755)
+
+    def test_archive_rejects_links_traversal_duplicates_and_protected_paths(self) -> None:
+        cases = []
+        link = tarfile.TarInfo("plugins/faber/link")
+        link.type = tarfile.SYMTYPE
+        link.linkname = "target"
+        cases.append(("link", [(link, None)]))
+        cases.append(("traversal", [(self._file_member("../private"), b"data")]))
+        cases.append(("backslash", [(self._file_member(r"..\private"), b"data")]))
+        cases.append(("protected", [(self._file_member("scripts/replace.sh"), b"data")]))
+        cases.append(("git-directory", [(self._file_member("plugins/faber/.git/config"), b"data")]))
+        cases.append(("gitignore", [(self._file_member("plugins/faber/.gitignore"), b"data")]))
+        cases.append(("gitattributes", [(self._file_member("plugins/faber/.gitattributes"), b"data")]))
+        cases.append(("gitmodules", [(self._file_member("plugins/faber/.gitmodules"), b"data")]))
+        duplicate = self._file_member("plugins/faber/file")
+        cases.append(("duplicate", [(duplicate, b"data"), (duplicate, b"data")]))
+
+        for name, members in cases:
             with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 archive = root / "candidate.tar.gz"
                 with tarfile.open(archive, "w:gz") as bundle:
-                    bundle.addfile(member, io.BytesIO(b"data") if member.isfile() else None)
+                    for member, content in members:
+                        bundle.addfile(member, io.BytesIO(content) if content is not None else None)
                 with self.assertRaises(SystemExit):
                     pull_candidate.extract_safely(archive, root / "payload")
 
-    def test_archive_rejects_build_identity_metadata(self) -> None:
+    def test_archive_rejects_metadata_modes_and_size_overflow(self) -> None:
+        for name in ("metadata", "mode", "size"):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                archive = root / "candidate.tar.gz"
+                member = self._file_member("plugins/faber/file")
+                if name == "metadata":
+                    member.uid = 501
+                    member.uname = "developer"
+                elif name == "mode":
+                    member.mode = 0o777
+                with tarfile.open(archive, "w:gz") as bundle:
+                    bundle.addfile(member, io.BytesIO(b"data"))
+                limit = 3 if name == "size" else pull_candidate.MAX_EXTRACTED_BYTES
+                with patch.object(pull_candidate, "MAX_EXTRACTED_BYTES", limit):
+                    with self.assertRaises(SystemExit):
+                        pull_candidate.extract_safely(archive, root / "payload")
+
+    def test_local_candidate_size_is_bounded(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            archive = root / "candidate.tar.gz"
-            member = self._file_member(".claude-plugin/marketplace.json")
-            member.mode = 0o644
-            member.uid = 501
-            member.uname = "developer"
-            with tarfile.open(archive, "w:gz") as bundle:
-                bundle.addfile(member, io.BytesIO(b"data"))
-            with self.assertRaises(SystemExit):
-                pull_candidate.extract_safely(archive, root / "payload")
+            source = root / "source"
+            destination = root / "destination"
+            source.mkdir()
+            destination.mkdir()
+            for name in pull_candidate.DOWNLOAD_FILES:
+                source.joinpath(name).write_bytes(b"1234")
+            with patch.object(pull_candidate, "MAX_DOWNLOAD_BYTES", 3):
+                with self.assertRaises(SystemExit):
+                    pull_candidate.copy_candidate(source, destination)
 
-    def test_identity_and_build_markers_are_detected(self) -> None:
-        samples = (
-            b"release-owner" + b"\x40example.org",
-            b"git@github" + b".com:example-owner/example-repository.git",
-            b"https://gitlab" + b".com/example-group/example-repository",
-            b"bitbucket" + b".org/example-team/example-repository",
-            b"/" + b"Users/developer/project",
-            b"build\t" + b"vcs" + b".revision=abc",
-        )
-        for sample in samples:
-            with self.subTest(sample=sample):
-                self.assertTrue(
-                    any(
-                        pattern.search(sample)
-                        for pattern in (
-                            *pull_candidate.BUILD_METADATA_PATTERNS,
-                            *pull_candidate.TEXT_IDENTITY_OR_BUILD_PATTERNS,
-                        )
-                    )
+    def test_candidate_state_rejects_protected_and_duplicate_paths(self) -> None:
+        for paths in (["scripts/replace.sh"], ["plugins/faber/file", "plugins/faber/file"]):
+            with self.subTest(paths=paths), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                entries = [
+                    {"path": path, "mode": "0644", "version_stamped": False}
+                    for path in paths
+                ]
+                root.joinpath("CANDIDATE_FILES").write_text(
+                    json.dumps({"format_version": 1, "files": entries})
                 )
-
-    def test_payload_verification_rejects_identity_and_build_markers(self) -> None:
-        samples = (
-            b"contact: release-owner" + b"\x40example.org",
-            b'contact: "release.owner"' + b"\x40example.org",
-            b"contact: 123+github-actions[bot]" + b"\x40evil.example",
-            b"source url: git@github" + b".com:example-owner/example-repository.git",
-            b"source url: https://github" + b".com./example-owner/example-repository",
-            b"source url: https://raw"
-            + b".githubuser"
-            + b"content.com/example-owner/example-repository/main/file",
-            b"source url: " + pull_candidate.PUBLIC_DISTRIBUTION_URL + b"/unpublished",
-            b"source url: https://git.corp.example/team/" + b"private-repository.git",
-            b"source url: https://github" + b".com\\example-owner\\example-repository",
-            b"contact: private.owner&#" + b"64;example.org",
-            b"source path: /" + b"Users/developer/project",
-            b"build setting: vcs" + b".revision=abc123",
-            b"branch: refs/" + b"heads/feature/release-candidate",
-            b"revision: " + (b"a" * 40),
-        )
-        for sample in samples:
-            with self.subTest(sample=sample), tempfile.TemporaryDirectory() as temporary:
-                payload = Path(temporary)
-                for relative in pull_candidate.PAYLOAD_FILES:
-                    path = payload / relative
-                    path.parent.mkdir(parents=True, exist_ok=True)
-                    content = b"__VERSION__" if relative in pull_candidate.STAMP_FILES else b"safe"
-                    path.write_bytes(content)
-                marker_path = payload / ".claude-plugin/marketplace.json"
-                marker_path.write_bytes(marker_path.read_bytes() + sample)
-                candidate_id = self._candidate_id(payload)
                 with self.assertRaises(SystemExit):
-                    pull_candidate.verify_payload(payload, candidate_id)
+                    pull_candidate.read_candidate_state(root)
 
-    def test_payload_allows_the_public_distribution_url(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            payload = Path(temporary)
-            self._write_valid_payload(payload)
-            skill = payload / "plugins/faber-claude-code/skills/faber/SKILL.md"
-            for wrapped in (
-                pull_candidate.PUBLIC_DISTRIBUTION_URL + b").\n",
-                b"`" + pull_candidate.PUBLIC_DISTRIBUTION_URL + b"`\n",
-                b"**" + pull_candidate.PUBLIC_DISTRIBUTION_URL + b"**\n",
-                b"__" + pull_candidate.PUBLIC_DISTRIBUTION_URL + b"__\n",
-                b"~~" + pull_candidate.PUBLIC_DISTRIBUTION_URL + b"~~\n",
-            ):
-                with self.subTest(wrapped=wrapped):
-                    skill.write_bytes(wrapped)
-                    pull_candidate.verify_payload(payload, self._candidate_id(payload))
-
-    def test_payload_rejects_identity_in_binary_bytes(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            payload = Path(temporary)
-            self._write_valid_payload(payload)
-            binary = payload / "plugins/faber-claude-code/bin/faber-companion_linux_amd64"
-            binary.write_bytes(binary.read_bytes() + b"\x00release-owner\x40example.org\x00")
-            with self.assertRaises(SystemExit):
-                pull_candidate.verify_payload(payload, self._candidate_id(payload))
-
-    def test_payload_rejects_vcs_reference_in_binary_bytes(self) -> None:
-        samples = (
-            b"github" + b".com/example-owner/example-repository",
-            b"github" + b".com/godbus/dbus-private/private-repository",
-            b"github" + b".com/godbus/dbus/private-repository",
-            b"github" + b".com/godbus/dbus/v5.private",
-            b"github" + b".com/zalando/go-keyring/private-repository",
-            b"github" + b".com/zalando/go-keyring/secret_service.private",
-            b"private-owner" + b"@github" + b".com/godbus/dbus/v5",
-            b"https://git.corp.example/team/" + b"private-repository.git",
-        )
-        for sample in samples:
-            with self.subTest(sample=sample), tempfile.TemporaryDirectory() as temporary:
-                payload = Path(temporary)
-                self._write_valid_payload(payload)
-                binary = payload / "plugins/faber-claude-code/bin/faber-companion_linux_amd64"
-                binary.write_bytes(binary.read_bytes() + b"\x00" + sample + b"\x00")
-                with self.assertRaises(SystemExit):
-                    pull_candidate.verify_payload(payload, self._candidate_id(payload))
-
-    def test_payload_rejects_json_escaped_identity(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            payload = Path(temporary)
-            self._write_valid_payload(payload)
-            catalog = payload / "plugins/faber-claude-code/tools/catalog.json"
-            catalog.write_text(r'{"instructions":"private.owner\u0040example.org","tools":[]}')
-            with self.assertRaises(SystemExit):
-                pull_candidate.verify_payload(payload, self._candidate_id(payload))
-
-    def test_payload_requires_canonical_manifest_identity(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            payload = Path(temporary)
-            self._write_valid_payload(payload)
-            manifest_path = payload / "plugins/faber-claude-code/.claude-plugin/plugin.json"
-            manifest = json.loads(manifest_path.read_text())
-            manifest["author"] = {"name": "Release Owner"}
-            manifest_path.write_text(json.dumps(manifest))
-            with self.assertRaises(SystemExit):
-                pull_candidate.verify_payload(payload, self._candidate_id(payload))
-
-    def test_public_contents_are_bound_to_candidate(self) -> None:
+    def test_public_tree_is_bound_to_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repo = Path(temporary)
             version = "0.1.2"
-            for relative in pull_candidate.PAYLOAD_FILES:
-                path = repo / relative
-                path.parent.mkdir(parents=True, exist_ok=True)
-                content = b"__VERSION__" if relative in pull_candidate.STAMP_FILES else b"safe"
-                path.write_bytes(content.replace(b"__VERSION__", version.encode()))
-            contents = {}
-            for relative in pull_candidate.PAYLOAD_FILES:
-                content = repo.joinpath(relative).read_bytes()
-                if relative in pull_candidate.STAMP_FILES:
-                    content = content.replace(version.encode(), b"__VERSION__")
-                contents[relative] = content
-            candidate_id = pull_candidate.candidate_digest(contents)
+            placeholder = b'{"client":"codex","version":"__VERSION__"}'
+            rendered = placeholder.replace(b"__VERSION__", version.encode())
+            path = repo / "plugins/faber-codex/catalog.json"
+            path.parent.mkdir(parents=True)
+            path.write_bytes(rendered)
+            path.chmod(0o644)
+            candidate_id = pull_candidate.candidate_digest(
+                {"plugins/faber-codex/catalog.json": placeholder}
+            )
             repo.joinpath("VERSION").write_text(version + "\n")
             repo.joinpath("CANDIDATE").write_text(candidate_id + "\n")
+            repo.joinpath("CANDIDATE_FILES").write_text(
+                pull_candidate.state_document(
+                    [pull_candidate.CandidateFile("plugins/faber-codex/catalog.json", 0o644, True)]
+                )
+            )
             self.assertEqual(pull_candidate.verify_public_candidate(repo), candidate_id)
-            repo.joinpath("plugins/faber-cowork/hooks/hooks.json").write_text("changed")
+            path.write_text("changed")
             with self.assertRaises(SystemExit):
                 pull_candidate.verify_public_candidate(repo)
 
-    def test_release_action_reuses_matching_open_draft(self) -> None:
-        candidate_id = "a" * 64
-        release = pull_candidate.OpenRelease(7, "release/v0.1.2", "0.1.2", candidate_id)
+    def test_update_mirrors_future_files_removes_old_files_and_preserves_public_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            repo = workspace / "repo"
+            payload = workspace / "payload"
+            repo.mkdir()
+            payload.mkdir()
+            old_path = "plugins/faber-old/file.txt"
+            old_content = b"old"
+            old_target = repo / old_path
+            old_target.parent.mkdir(parents=True)
+            old_target.write_bytes(old_content)
+            old_target.chmod(0o644)
+            old_id = pull_candidate.candidate_digest({old_path: old_content})
+            repo.joinpath("VERSION").write_text("0.1.1\n")
+            repo.joinpath("CANDIDATE").write_text(old_id + "\n")
+            repo.joinpath("CANDIDATE_FILES").write_text(
+                pull_candidate.state_document(
+                    [pull_candidate.CandidateFile(old_path, 0o644, False)]
+                )
+            )
+            repo.joinpath("README.md").write_text("public documentation\n")
+            checksum = repo / "plugins/faber-gemini/SHA256SUMS"
+            checksum.parent.mkdir(parents=True)
+            checksum.write_text("placeholder  catalog.json\n")
+            validator = repo / "scripts/validate-public-release.sh"
+            validator.parent.mkdir()
+            validator.write_text("#!/bin/sh\nexit 0\n")
+            validator.chmod(0o755)
+
+            new_path = "plugins/faber-gemini/catalog.json"
+            new_content = b'{"client":"gemini-cli","version":"__VERSION__"}'
+            target = payload / new_path
+            target.parent.mkdir(parents=True)
+            target.write_bytes(new_content)
+            new_id = pull_candidate.candidate_digest({new_path: new_content})
+            changed, version = pull_candidate.update_repository(
+                repo, payload, {new_path: 0o644}, new_id
+            )
+
+            self.assertTrue(changed)
+            self.assertEqual(version, "0.1.2")
+            self.assertFalse(old_target.exists())
+            self.assertEqual(repo.joinpath("README.md").read_text(), "public documentation\n")
+            self.assertIn('"client":"gemini-cli"', repo.joinpath(new_path).read_text())
+            self.assertIn('"version":"0.1.2"', repo.joinpath(new_path).read_text())
+            expected_checksum = pull_candidate.sha256(repo.joinpath(new_path))
+            self.assertEqual(checksum.read_text(), f"{expected_checksum}  catalog.json\n")
+            self.assertEqual(pull_candidate.verify_public_candidate(repo), new_id)
+
+    def test_update_rejects_collision_with_public_owned_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            repo = workspace / "repo"
+            payload = workspace / "payload"
+            repo.mkdir()
+            payload.mkdir()
+            old_path = "plugins/faber-old/file.txt"
+            old_content = b"old"
+            old_target = repo / old_path
+            old_target.parent.mkdir(parents=True)
+            old_target.write_bytes(old_content)
+            old_target.chmod(0o644)
+            repo.joinpath("VERSION").write_text("0.1.1\n")
+            repo.joinpath("CANDIDATE").write_text(
+                pull_candidate.candidate_digest({old_path: old_content}) + "\n"
+            )
+            repo.joinpath("CANDIDATE_FILES").write_text(
+                pull_candidate.state_document(
+                    [pull_candidate.CandidateFile(old_path, 0o644, False)]
+                )
+            )
+            public_path = "plugins/faber-new/README.md"
+            public_file = repo / public_path
+            public_file.parent.mkdir(parents=True)
+            public_file.write_text("public documentation\n")
+            candidate_content = b"candidate documentation\n"
+            payload_file = payload / public_path
+            payload_file.parent.mkdir(parents=True)
+            payload_file.write_bytes(candidate_content)
+
+            with self.assertRaises(SystemExit):
+                pull_candidate.update_repository(
+                    repo,
+                    payload,
+                    {public_path: 0o644},
+                    pull_candidate.candidate_digest({public_path: candidate_content}),
+                )
+            self.assertEqual(public_file.read_text(), "public documentation\n")
+
+    def test_revision_validation_uses_committed_candidate_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repo = Path(temporary) / "repo"
+            repo.mkdir()
+            scripts = repo / "scripts"
+            scripts.mkdir()
+            source_scripts = Path(__file__).parent
+            for name in ("pull_candidate.py", "validate-public-release.sh"):
+                shutil.copy2(source_scripts / name, scripts / name)
+            relative = "plugins/faber/file.txt"
+            content = b"candidate\n"
+            candidate_file = repo / relative
+            candidate_file.parent.mkdir(parents=True)
+            candidate_file.write_bytes(content)
+            candidate_file.chmod(0o644)
+            candidate_id = pull_candidate.candidate_digest({relative: content})
+            repo.joinpath("VERSION").write_text("0.1.1\n")
+            repo.joinpath("CANDIDATE").write_text(candidate_id + "\n")
+            repo.joinpath("CANDIDATE_FILES").write_text(
+                pull_candidate.state_document(
+                    [pull_candidate.CandidateFile(relative, 0o644, False)]
+                )
+            )
+            repo.joinpath(".gitignore").write_text(relative + "\n")
+            subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, check=True)
+            subprocess.run(["git", "add", "."], cwd=repo, check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-c",
+                    "user.name=Test",
+                    "-c",
+                    "user.email=test@example.com",
+                    "commit",
+                    "-qm",
+                    "test",
+                ],
+                cwd=repo,
+                check=True,
+            )
+            self.assertEqual(pull_candidate.verify_public_candidate(repo), candidate_id)
+            with self.assertRaises(SystemExit):
+                pull_candidate.validate_revision(repo, "HEAD")
+
+    def test_release_action_updates_matching_open_release_for_retry(self) -> None:
+        release = pull_candidate.OpenRelease(7, "release/v0.1.2", "0.1.2", "a" * 64)
         self.assertEqual(
-            pull_candidate.release_action("0" * 64, "0.1.1", candidate_id, release),
-            ("noop", "0.1.2"),
+            pull_candidate.release_action("0" * 64, "0.1.1", "a" * 64, release),
+            ("update", "0.1.2"),
         )
+
+    def test_mode_only_candidate_change_creates_release(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            repo = workspace / "repo"
+            payload = workspace / "payload"
+            repo.mkdir()
+            payload.mkdir()
+            relative = "plugins/faber/launcher"
+            content = b"launcher"
+            for root in (repo, payload):
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(content)
+            repo.joinpath(relative).chmod(0o644)
+            payload.joinpath(relative).chmod(0o755)
+            candidate_id = pull_candidate.candidate_digest({relative: content})
+            repo.joinpath("VERSION").write_text("0.1.1\n")
+            repo.joinpath("CANDIDATE").write_text(candidate_id + "\n")
+            repo.joinpath("CANDIDATE_FILES").write_text(
+                pull_candidate.state_document(
+                    [pull_candidate.CandidateFile(relative, 0o644, False)]
+                )
+            )
+            validator = repo / "scripts/validate-public-release.sh"
+            validator.parent.mkdir()
+            validator.write_text("#!/bin/sh\nexit 0\n")
+            validator.chmod(0o755)
+
+            changed, version = pull_candidate.update_repository(
+                repo, payload, {relative: 0o755}, candidate_id
+            )
+            self.assertTrue(changed)
+            self.assertEqual(version, "0.1.2")
+            self.assertEqual(repo.joinpath(relative).stat().st_mode & 0o777, 0o755)
 
     def test_release_action_fails_closed_on_production_rollback(self) -> None:
         release = pull_candidate.OpenRelease(7, "release/v0.1.2", "0.1.2", "b" * 64)
         with self.assertRaises(SystemExit):
             pull_candidate.release_action("a" * 64, "0.1.1", "a" * 64, release)
 
-    def test_open_release_is_verified_from_its_remote_contents(self) -> None:
-        version = "0.1.2"
-        placeholder_contents = {
-            relative: (b"__VERSION__" if relative in pull_candidate.STAMP_FILES else b"safe")
-            for relative in pull_candidate.PAYLOAD_FILES
-        }
-        candidate_id = pull_candidate.candidate_digest(placeholder_contents)
-
-        def fake_run(args, **_kwargs):
-            if args[:3] == ["gh", "pr", "list"]:
-                return type(
-                    "Result",
-                    (),
-                    {
-                        "stdout": json.dumps(
-                            [
-                                {
-                                    "number": 7,
-                                    "isDraft": True,
-                                    "headRefName": "release/v0.1.2",
-                                }
-                            ]
-                        )
-                    },
-                )()
-            return type("Result", (), {"stdout": ""})()
-
-        def fake_check_output(args, **kwargs):
-            path = args[2].removeprefix("FETCH_HEAD:")
-            if path == "CANDIDATE":
-                value = candidate_id + "\n"
-            elif path == "VERSION":
-                value = version + "\n"
-            else:
-                value = placeholder_contents[path].replace(b"__VERSION__", version.encode())
-                return value
-            return value if kwargs.get("text") else value.encode()
-
-        with patch.object(pull_candidate.subprocess, "run", side_effect=fake_run), patch.object(
-            pull_candidate.subprocess, "check_output", side_effect=fake_check_output
-        ), patch.object(pull_candidate, "validate_revision"):
-            release = pull_candidate.inspect_open_release(Path("."))
-        self.assertEqual(
-            release,
-            pull_candidate.OpenRelease(7, "release/v0.1.2", version, candidate_id),
+    @staticmethod
+    def _write_downloads(root: Path, candidate_id: str, archive: bytes) -> None:
+        root.joinpath("candidate.json").write_text(
+            json.dumps({"candidate_id": candidate_id, "format_version": 1})
         )
+        root.joinpath("candidate.tar.gz").write_bytes(archive)
+        CandidatePullTests._write_checksums(root)
 
     @staticmethod
-    def _link_member() -> tarfile.TarInfo:
-        member = tarfile.TarInfo("README.md")
-        member.type = tarfile.SYMTYPE
-        member.linkname = "private"
-        return member
+    def _write_checksums(root: Path) -> None:
+        lines = []
+        for name in ("candidate.json", "candidate.tar.gz"):
+            digest = hashlib.sha256(root.joinpath(name).read_bytes()).hexdigest()
+            lines.append(f"{digest}  {name}\n")
+        root.joinpath("SHA256SUMS").write_text("".join(lines))
 
     @staticmethod
     def _file_member(name: str) -> tarfile.TarInfo:
         member = tarfile.TarInfo(name)
         member.size = 4
+        member.mode = 0o644
+        member.uid = member.gid = 0
+        member.uname = member.gname = ""
+        member.mtime = 0
         return member
 
     @staticmethod
-    def _candidate_id(payload: Path) -> str:
-        lines = []
-        for relative in sorted(pull_candidate.PAYLOAD_FILES):
-            digest = hashlib.sha256(payload.joinpath(relative).read_bytes()).hexdigest()
-            lines.append(f"{digest}  {relative}\n")
-        return hashlib.sha256("".join(lines).encode()).hexdigest()
-
-    @staticmethod
-    def _write_valid_payload(payload: Path) -> None:
-        for relative in pull_candidate.PAYLOAD_FILES:
-            path = payload / relative
-            path.parent.mkdir(parents=True, exist_ok=True)
-            if relative.endswith(".json"):
-                content = (
-                    b'{"version":"__VERSION__"}'
-                    if relative in pull_candidate.STAMP_FILES
-                    else b"{}"
-                )
-            else:
-                content = b"__VERSION__" if relative in pull_candidate.STAMP_FILES else b"safe"
-            path.write_bytes(content)
-        payload.joinpath(".claude-plugin/marketplace.json").write_text(
-            json.dumps({"owner": {"name": "Faber"}})
-        )
-        manifest = {
-            "version": "__VERSION__",
-            "author": {"name": "Faber"},
-            "repository": pull_candidate.PUBLIC_DISTRIBUTION_URL.decode(),
-            "homepage": "https://www.getfaber.app",
-        }
-        for relative in (
-            "plugins/faber-claude-code/.claude-plugin/plugin.json",
-            "plugins/faber-cowork/.claude-plugin/plugin.json",
-        ):
-            payload.joinpath(relative).write_text(json.dumps(manifest))
+    def _write_archive(archive: Path, files: dict[str, tuple[bytes, int]]) -> None:
+        with tarfile.open(archive, "w:gz") as bundle:
+            for name, (content, mode) in files.items():
+                member = CandidatePullTests._file_member(name)
+                member.size = len(content)
+                member.mode = mode
+                bundle.addfile(member, io.BytesIO(content))
 
 
 if __name__ == "__main__":
