@@ -34,7 +34,7 @@ jobs:
 
   pull:
     name: Pull and publish trusted candidate
-    if: github.event_name != 'pull_request' && github.repository == 'faber9177/mcp-plugins' && github.ref == 'refs/heads/main'
+    if: github.event_name != 'pull_request' && github.repository_id == '1327095477' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
     env:

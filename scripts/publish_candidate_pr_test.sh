@@ -11,6 +11,7 @@ candidate_id="$(tr -d '[:space:]' < "$root/CANDIDATE")"
 branch="release/v$version"
 head_sha="$(printf 'a%.0s' {1..40})"
 export FAKE_VERSION="$version" FAKE_CANDIDATE="$candidate_id" FAKE_HEAD_SHA="$head_sha"
+export FAKE_REPOSITORY="example/plugin-mirror"
 export REAL_PYTHON3="$(command -v python3)"
 
 cat > "$fake_bin/git" <<'SH'
@@ -66,10 +67,10 @@ case "$*" in
     if [ -n "${FAKE_VIEW:-}" ]; then
       printf '%s' "$FAKE_VIEW"
     else
-      printf '{"number":7,"isDraft":true,"author":{"login":"app/github-actions"},"baseRefName":"main","headRefName":"release/v%s","headRefOid":"%s","headRepository":{"nameWithOwner":"faber9177/mcp-plugins"},"mergeable":"MERGEABLE"}' "$FAKE_VERSION" "$FAKE_HEAD_SHA"
+      printf '{"number":7,"isDraft":true,"author":{"login":"app/github-actions"},"baseRefName":"main","headRefName":"release/v%s","headRefOid":"%s","headRepository":{"nameWithOwner":"%s"},"mergeable":"MERGEABLE"}' "$FAKE_VERSION" "$FAKE_HEAD_SHA" "$FAKE_REPOSITORY"
     fi
     ;;
-  "api repos/faber9177/mcp-plugins/pulls/7")
+  "api repos/$FAKE_REPOSITORY/pulls/7")
     printf '{"user":{"login":"%s","type":"%s","id":%s}}' \
       "${FAKE_AUTHOR_LOGIN:-github-actions[bot]}" \
       "${FAKE_AUTHOR_TYPE:-Bot}" \
@@ -83,7 +84,7 @@ SH
 chmod +x "$fake_bin/git" "$fake_bin/python3" "$fake_bin/gh"
 
 run_publisher() {
-  FAKE_LOG="$1" GITHUB_OUTPUT="${2:-}" PATH="$fake_bin:$PATH" \
+  FAKE_LOG="$1" GITHUB_OUTPUT="${2:-}" GITHUB_REPOSITORY="$FAKE_REPOSITORY" PATH="$fake_bin:$PATH" \
     "$root/scripts/publish_candidate_pr.sh" "$version" "$candidate_id"
 }
 
@@ -95,7 +96,7 @@ grep -Fq 'python3 scripts/pull_candidate.py --repo . --verify-revision HEAD' "$l
 grep -Fq 'python3 scripts/pull_candidate.py --repo . --verify-revision FETCH_HEAD' "$log"
 grep -Fq "gh pr create --base main --head $branch" "$log"
 grep -Fq 'gh pr ready 7' "$log"
-grep -Fq "gh api --method PUT repos/faber9177/mcp-plugins/pulls/7/merge -f sha=$head_sha -f merge_method=squash" "$log"
+grep -Fq "gh api --method PUT repos/$FAKE_REPOSITORY/pulls/7/merge -f sha=$head_sha -f merge_method=squash" "$log"
 grep -Fq "git push origin --delete $branch" "$log"
 grep -Fq 'pr_number=7' "$outputs"
 grep -Fq "release_branch=$branch" "$outputs"
@@ -104,10 +105,10 @@ grep -Fq "head_sha=$head_sha" "$outputs"
 
 : > "$log"
 existing_sha="$(printf '1%.0s' {1..40})"
-existing_pr="$(printf '{"number":7,"isDraft":false,"author":{"login":"github-actions[bot]"},"baseRefName":"main","headRefName":"%s","headRepository":{"nameWithOwner":"faber9177/mcp-plugins"}}' "$branch")"
-existing_view="$(printf '{"number":7,"isDraft":false,"author":{"login":"github-actions[bot]"},"baseRefName":"main","headRefName":"%s","headRefOid":"%s","headRepository":{"nameWithOwner":"faber9177/mcp-plugins"},"mergeable":"MERGEABLE"}' "$branch" "$head_sha")"
+existing_pr="$(printf '{"number":7,"isDraft":false,"author":{"login":"github-actions[bot]"},"baseRefName":"main","headRefName":"%s","headRepository":{"nameWithOwner":"%s"}}' "$branch" "$FAKE_REPOSITORY")"
+existing_view="$(printf '{"number":7,"isDraft":false,"author":{"login":"github-actions[bot]"},"baseRefName":"main","headRefName":"%s","headRefOid":"%s","headRepository":{"nameWithOwner":"%s"},"mergeable":"MERGEABLE"}' "$branch" "$head_sha" "$FAKE_REPOSITORY")"
 FAKE_LOG="$log" FAKE_OPEN_RELEASES="$branch" FAKE_EXISTING_SHA="$existing_sha" \
-FAKE_PR="$existing_pr" FAKE_VIEW="$existing_view" PATH="$fake_bin:$PATH" \
+FAKE_PR="$existing_pr" FAKE_VIEW="$existing_view" GITHUB_REPOSITORY="$FAKE_REPOSITORY" PATH="$fake_bin:$PATH" \
   "$root/scripts/publish_candidate_pr.sh" "$version" "$candidate_id"
 grep -Fq "git push --force-with-lease=refs/heads/$branch:$existing_sha origin $branch" "$log"
 grep -Fq 'gh pr edit 7' "$log"
@@ -121,7 +122,7 @@ assert_rejected() {
   expected="$2"
   shift 2
   : > "$log"
-  if env FAKE_LOG="$log" PATH="$fake_bin:$PATH" "$@" \
+  if env FAKE_LOG="$log" GITHUB_REPOSITORY="$FAKE_REPOSITORY" PATH="$fake_bin:$PATH" "$@" \
     "$root/scripts/publish_candidate_pr.sh" "$version" "$candidate_id" \
     >"$temporary/$name.out" 2>&1; then
     echo "publisher accepted $name" >&2
@@ -133,7 +134,7 @@ assert_rejected() {
 assert_rejected conflict 'Another plugin release PR is already open' \
   FAKE_OPEN_RELEASES=release/v9.9.9
 
-human_pr="$(printf '{"number":7,"isDraft":true,"author":{"login":"app/github-actions"},"baseRefName":"main","headRefName":"%s","headRepository":{"nameWithOwner":"faber9177/mcp-plugins"}}' "$branch")"
+human_pr="$(printf '{"number":7,"isDraft":true,"author":{"login":"app/github-actions"},"baseRefName":"main","headRefName":"%s","headRepository":{"nameWithOwner":"%s"}}' "$branch" "$FAKE_REPOSITORY")"
 assert_rejected human-pr 'was not created by github-actions[bot]' \
   FAKE_OPEN_RELEASES="$branch" FAKE_PR="$human_pr" FAKE_AUTHOR_LOGIN=human
 if grep -Fq 'git push' "$log"; then
@@ -146,7 +147,7 @@ assert_rejected wrong-bot-id 'was not created by github-actions[bot]' \
 assert_rejected wrong-bot-type 'was not created by github-actions[bot]' \
   FAKE_OPEN_RELEASES="$branch" FAKE_PR="$human_pr" FAKE_AUTHOR_TYPE=User
 
-wrong_base_pr="$(printf '{"number":7,"isDraft":true,"author":{"login":"github-actions[bot]"},"baseRefName":"other","headRefName":"%s","headRepository":{"nameWithOwner":"faber9177/mcp-plugins"}}' "$branch")"
+wrong_base_pr="$(printf '{"number":7,"isDraft":true,"author":{"login":"github-actions[bot]"},"baseRefName":"other","headRefName":"%s","headRepository":{"nameWithOwner":"%s"}}' "$branch" "$FAKE_REPOSITORY")"
 assert_rejected wrong-base 'does not target main' \
   FAKE_OPEN_RELEASES="$branch" FAKE_PR="$wrong_base_pr"
 
@@ -154,7 +155,7 @@ wrong_repo_pr="$(printf '{"number":7,"isDraft":true,"author":{"login":"github-ac
 assert_rejected wrong-repo 'comes from another repository' \
   FAKE_OPEN_RELEASES="$branch" FAKE_PR="$wrong_repo_pr"
 
-wrong_view="$(printf '{"number":7,"isDraft":true,"author":{"login":"github-actions[bot]"},"baseRefName":"main","headRefName":"%s","headRefOid":"%s","headRepository":{"nameWithOwner":"faber9177/mcp-plugins"},"mergeable":"MERGEABLE"}' "$branch" "$(printf 'b%.0s' {1..40})")"
+wrong_view="$(printf '{"number":7,"isDraft":true,"author":{"login":"github-actions[bot]"},"baseRefName":"main","headRefName":"%s","headRefOid":"%s","headRepository":{"nameWithOwner":"%s"},"mergeable":"MERGEABLE"}' "$branch" "$(printf 'b%.0s' {1..40})" "$FAKE_REPOSITORY")"
 assert_rejected changed-head 'head changed after validation' FAKE_VIEW="$wrong_view"
 if grep -Fq 'gh api --method PUT' "$log"; then
   echo "publisher merged a changed PR head" >&2
@@ -168,7 +169,7 @@ if grep -Fq 'git push' "$log"; then
   exit 1
 fi
 
-unmergeable_view="$(printf '{"number":7,"isDraft":false,"author":{"login":"github-actions[bot]"},"baseRefName":"main","headRefName":"%s","headRefOid":"%s","headRepository":{"nameWithOwner":"faber9177/mcp-plugins"},"mergeable":"CONFLICTING"}' "$branch" "$head_sha")"
+unmergeable_view="$(printf '{"number":7,"isDraft":false,"author":{"login":"github-actions[bot]"},"baseRefName":"main","headRefName":"%s","headRefOid":"%s","headRepository":{"nameWithOwner":"%s"},"mergeable":"CONFLICTING"}' "$branch" "$head_sha" "$FAKE_REPOSITORY")"
 assert_rejected unmergeable 'is not mergeable: CONFLICTING' \
   FAKE_VIEW="$unmergeable_view"
 if grep -Fq 'gh api --method PUT' "$log"; then
@@ -188,7 +189,7 @@ if grep -Fq "git push origin --delete $branch" "$log"; then
 fi
 
 : > "$log"
-FAKE_LOG="$log" FAKE_DELETE_FAIL=1 PATH="$fake_bin:$PATH" \
+FAKE_LOG="$log" FAKE_DELETE_FAIL=1 GITHUB_REPOSITORY="$FAKE_REPOSITORY" PATH="$fake_bin:$PATH" \
   "$root/scripts/publish_candidate_pr.sh" "$version" "$candidate_id"
 grep -Fq "git ls-remote --exit-code --heads origin refs/heads/$branch" "$log"
 
@@ -198,7 +199,7 @@ assert_rejected branch-cleanup-lookup 'Could not verify merged release branch cl
   FAKE_DELETE_FAIL=1 FAKE_BRANCH_LOOKUP_ERROR=1
 
 : > "$log"
-if FAKE_LOG="$log" PATH="$fake_bin:$PATH" \
+if FAKE_LOG="$log" GITHUB_REPOSITORY="$FAKE_REPOSITORY" PATH="$fake_bin:$PATH" \
   "$root/scripts/publish_candidate_pr.sh" 9.9.9 "$candidate_id" \
   >"$temporary/version.out" 2>&1; then
   echo "publisher accepted a mismatched tree version" >&2
@@ -207,12 +208,19 @@ fi
 grep -Fq 'release version does not match the validated tree' "$temporary/version.out"
 
 : > "$log"
-if FAKE_LOG="$log" PATH="$fake_bin:$PATH" \
+if FAKE_LOG="$log" GITHUB_REPOSITORY="$FAKE_REPOSITORY" PATH="$fake_bin:$PATH" \
   "$root/scripts/publish_candidate_pr.sh" "$version" "$(printf 'b%.0s' {1..64})" \
   >"$temporary/candidate.out" 2>&1; then
   echo "publisher accepted a mismatched candidate" >&2
   exit 1
 fi
 grep -Fq 'candidate ID does not match the validated tree' "$temporary/candidate.out"
+
+if env -u GITHUB_REPOSITORY "$root/scripts/publish_candidate_pr.sh" "$version" "$candidate_id" \
+  >"$temporary/repository.out" 2>&1; then
+  echo "publisher accepted a missing repository identity" >&2
+  exit 1
+fi
+grep -Fq 'GITHUB_REPOSITORY is required' "$temporary/repository.out"
 
 echo "public release PR and auto-merge tests passed"
