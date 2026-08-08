@@ -23,10 +23,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.23.x"
-
       - name: Validate release automation
         run: |
           python3 -m unittest scripts/pull_candidate_test.py
@@ -48,16 +44,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.23.x"
-
       - id: candidate
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/pull_candidate.py --check-open-release
 
-      - name: Create or update draft release
+      - name: Create and merge trusted release
         if: steps.candidate.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
