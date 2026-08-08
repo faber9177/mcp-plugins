@@ -9,7 +9,7 @@
     {
       "name": "faber-claude-code",
       "source": "./plugins/faber-claude-code",
-      "description": "Publish and recall Faber artifacts with local queueing and knowledge capture.",
+      "description": "Publish and recall Faber artifacts with reliable delivery and knowledge capture.",
       "category": "Productivity",
       "tags": ["artifacts", "knowledge", "mcp"]
     },

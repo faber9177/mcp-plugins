@@ -1,9 +1,9 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "faber-claude-code",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "displayName": "Faber for Claude Code",
-  "description": "Publish and recall Faber artifacts with local queueing and knowledge capture.",
+  "description": "Publish and recall Faber artifacts with reliable delivery and knowledge capture.",
   "author": {
     "name": "Faber"
   },

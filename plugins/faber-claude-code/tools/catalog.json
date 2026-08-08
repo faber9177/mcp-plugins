@@ -1,6 +1,6 @@
 {
   "client": "claude-code",
-  "instructions": "This server targets hosted Faber. Unqualified references to Faber mean this destination. For a report or document, default to a polished, self-contained static HTML artifact unless the user requests another format. Make HTML easy to read: lead with a clear title and short orientation; use semantic HTML and a clear heading hierarchy; use responsive layout; and include a compact sidebar in every artifact (anchored navigation for multi-section reports, or a concise context/summary panel for short ones). Preserve substantive facts and caveats. Keep artifacts portable and private: do not use JavaScript, external CSS, network requests, remote fonts, or external assets, and never include secrets, raw transcript text, or private session details. These HTML and sidebar guidelines do not apply to code, datasets, or an explicitly requested alternate format.",
+  "instructions": "Use Faber to publish durable artifacts and reuse accessible team knowledge. For a report or document, default to a polished, self-contained static HTML artifact unless the user requests another format. Make HTML easy to read: lead with a clear title and short orientation; use semantic HTML and a clear heading hierarchy; use responsive layout; and include a compact sidebar in every artifact (anchored navigation for multi-section reports, or a concise context/summary panel for short ones). Preserve substantive facts and caveats. Keep artifacts portable and private: do not use JavaScript, external CSS, network requests, remote fonts, or external assets, and never include secrets, raw transcript text, or private session details. These HTML and sidebar guidelines do not apply to code, datasets, or an explicitly requested alternate format.",
   "tools": [
     {
       "name": "faber_context",
@@ -28,7 +28,7 @@
     {
       "name": "faber_get_artifact",
       "title": "Get artifact source from Faber",
-      "description": "Fetch one accessible version of a Faber artifact with its source and shareable provenance. Private capsule and transcript evidence are never returned. Use update_of when revising the same artifact and derived_from for distinct work.",
+      "description": "Fetch one accessible version of a Faber artifact with its source and shareable provenance. Private session knowledge is not returned. Use update_of when revising the same artifact and derived_from for distinct work.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -78,13 +78,13 @@
     },
     {
       "name": "faber_publish_artifact",
-      "title": "Publish artifact to Faber hosted",
-      "description": "Publish an artifact to Faber hosted when the user prompts you to publish it. For a report or document, default to a polished, self-contained static HTML artifact unless the user requests another format. Make HTML easy to read: lead with a clear title and short orientation; use semantic HTML and a clear heading hierarchy; use responsive layout; and include a compact sidebar in every artifact (anchored navigation for multi-section reports, or a concise context/summary panel for short ones). Preserve substantive facts and caveats. Keep artifacts portable and private: do not use JavaScript, external CSS, network requests, remote fonts, or external assets, and never include secrets, raw transcript text, or private session details. These HTML and sidebar guidelines do not apply to code, datasets, or an explicitly requested alternate format. Pass the absolute path to the completed UTF-8 file in content_ref; the local Faber companion snapshots it securely. Reports are private to the publishing user by default. If Faber reports multiple workspaces, ask the user which named workspace should receive this artifact and retry with workspace_name; use workspace_slug only when Faber reports duplicate names. Otherwise do not ask for a separate approval step. To amend an existing report after a later prompt, fetch its source and pass update_of so Faber appends an immutable version.",
+      "title": "Publish artifact to Faber",
+      "description": "Publish an artifact to Faber when the user asks. For a report or document, default to a polished, self-contained static HTML artifact unless the user requests another format. Make HTML easy to read: lead with a clear title and short orientation; use semantic HTML and a clear heading hierarchy; use responsive layout; and include a compact sidebar in every artifact (anchored navigation for multi-section reports, or a concise context/summary panel for short ones). Preserve substantive facts and caveats. Keep artifacts portable and private: do not use JavaScript, external CSS, network requests, remote fonts, or external assets, and never include secrets, raw transcript text, or private session details. These HTML and sidebar guidelines do not apply to code, datasets, or an explicitly requested alternate format. Pass the absolute path to the completed UTF-8 file in content_ref. Reports are private to the publishing user by default. If Faber reports multiple workspaces, ask the user which named workspace should receive this artifact and retry with workspace_name; use workspace_slug only when Faber reports duplicate names. Otherwise do not ask for a separate approval step. To amend an existing report after a later prompt, fetch its source and pass update_of so Faber appends an immutable version.",
       "inputSchema": {
         "type": "object",
         "properties": {
           "content_ref": {
-            "description": "Absolute path to one local UTF-8 artifact file. The Faber companion snapshots and uploads it outside the model context.",
+            "description": "Absolute path to one regular UTF-8 artifact file to publish. Limited to 5 MiB.",
             "type": "string",
             "minLength": 1,
             "maxLength": 4096
@@ -112,7 +112,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 262144,
-            "description": "Required private KnowledgeCapsule v1 Markdown with non-empty Outcome, Decisions and Rationale, Reusable Knowledge, and Verification headings."
+            "description": "Required private session knowledge in Markdown with non-empty Outcome, Decisions and Rationale, Reusable Knowledge, and Verification headings."
           },
           "model": {
             "description": "Exact generating model id when known.",
@@ -157,12 +157,6 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 200
-          },
-          "idempotency_key": {
-            "description": "Internal stable publish key supplied by the Faber companion for safe retrying.",
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 200
           }
         },
         "required": [
@@ -181,15 +175,15 @@
     },
     {
       "name": "faber_publish_status",
-      "title": "Check queued Faber delivery",
-      "description": "Check whether a queued artifact publish has reached Faber. If the status is workspace_required, retry this tool with the same queue_id and the exact displayed workspace_name, or workspace_slug when requested, to resume the retained publish.",
+      "title": "Check Faber publication",
+      "description": "Check whether an accepted artifact publication has reached Faber. If workspace selection is required, retry with the same queue_id and the exact displayed workspace_name, or workspace_slug when requested.",
       "inputSchema": {
         "type": "object",
         "properties": {
           "queue_id": {
             "type": "string",
             "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$",
-            "description": "Queue id returned by faber_publish_artifact."
+            "description": "Publication reference returned by faber_publish_artifact."
           },
           "workspace_name": {
             "description": "Exact displayed workspace name used to resume a workspace_required publish.",
