@@ -29,7 +29,7 @@ PROTECTED_ROOTS = {
 }
 GIT_CONTROL_NAMES = {".git", ".gitignore", ".gitattributes", ".gitmodules"}
 MAX_DOWNLOAD_BYTES = 64 * 1024 * 1024
-MAX_EXTRACTED_BYTES = 64 * 1024 * 1024
+MAX_EXTRACTED_BYTES = 96 * 1024 * 1024
 MAX_ARCHIVE_MEMBERS = 1024
 
 
@@ -269,6 +269,75 @@ def public_candidate_digest(repo: Path, version: str, files: list[CandidateFile]
     return candidate_digest(contents)
 
 
+def verify_public_metadata(
+    repo: Path, version: str, candidate_files: list[CandidateFile]
+) -> None:
+    packages = sorted(
+        {
+            "/".join(PurePosixPath(entry.path).parts[:2])
+            for entry in candidate_files
+            if len(PurePosixPath(entry.path).parts) >= 3
+            and PurePosixPath(entry.path).parts[0] == "plugins"
+        }
+    )
+    binary_packages = {
+        package
+        for package in packages
+        if any(
+            entry.path.startswith(package + "/bin/") for entry in candidate_files
+        )
+    }
+    expected_metadata = {f"{package}/VERSION" for package in packages}
+    expected_metadata.update(
+        f"{package}/SHA256SUMS" for package in binary_packages
+    )
+    actual_metadata = {
+        path.relative_to(repo).as_posix()
+        for pattern in ("plugins/**/VERSION", "plugins/**/SHA256SUMS")
+        for path in repo.glob(pattern)
+    }
+    if actual_metadata != expected_metadata:
+        fail("public package metadata does not match current candidate packages")
+
+    for package in packages:
+        package_root = repo / package
+        version_file = package_root / "VERSION"
+        if (
+            version_file.is_symlink()
+            or not version_file.is_file()
+            or version_file.stat().st_mode & 0o777 != 0o644
+        ):
+            fail(f"public package VERSION is unsafe: {package}")
+        try:
+            package_version = version_file.read_text()
+        except (FileNotFoundError, UnicodeDecodeError) as error:
+            fail(f"public package VERSION is invalid: {package}: {error}")
+        if package_version != version + "\n":
+            fail(f"public package VERSION disagrees: {package}")
+        if package not in binary_packages:
+            continue
+        checksum_file = package_root / "SHA256SUMS"
+        if (
+            checksum_file.is_symlink()
+            or not checksum_file.is_file()
+            or checksum_file.stat().st_mode & 0o777 != 0o644
+        ):
+            fail(f"public package SHA256SUMS is unsafe: {package}")
+        expected_checksums = []
+        for entry in sorted(candidate_files, key=lambda value: value.path):
+            if not entry.path.startswith(package + "/"):
+                continue
+            target = repo / entry.path
+            relative = target.relative_to(package_root).as_posix()
+            expected_checksums.append(f"{sha256(target)}  {relative}\n")
+        try:
+            checksums = checksum_file.read_text()
+        except (FileNotFoundError, UnicodeDecodeError) as error:
+            fail(f"public package SHA256SUMS is invalid: {package}: {error}")
+        if checksums != "".join(expected_checksums):
+            fail(f"public package SHA256SUMS disagrees: {package}")
+
+
 def verify_public_candidate(repo: Path) -> str:
     try:
         version = repo.joinpath("VERSION").read_text().strip()
@@ -281,6 +350,7 @@ def verify_public_candidate(repo: Path) -> str:
     files = read_candidate_state(repo)
     if public_candidate_digest(repo, version, files) != candidate_id:
         fail("public plugin contents do not match CANDIDATE")
+    verify_public_metadata(repo, version, files)
     return candidate_id
 
 
@@ -411,16 +481,50 @@ def remove_empty_parents(path: Path, stop: Path) -> None:
         parent = parent.parent
 
 
+def remove_public_metadata(root: Path) -> None:
+    for pattern in ("plugins/**/VERSION", "plugins/**/SHA256SUMS"):
+        for path in root.glob(pattern):
+            if path.is_symlink() or not path.is_file():
+                fail(
+                    "public package metadata is unsafe: "
+                    + path.relative_to(root).as_posix()
+                )
+            path.unlink()
+            remove_empty_parents(path, root)
+
+
 def refresh_public_metadata(
     prepared: Path, version: str, candidate_files: list[CandidateFile]
 ) -> None:
-    for path in prepared.glob("plugins/**/VERSION"):
-        if path.is_file() and not path.is_symlink():
-            path.write_text(version + "\n")
-    for checksum_file in prepared.glob("plugins/**/SHA256SUMS"):
-        if not checksum_file.is_file() or checksum_file.is_symlink():
+    remove_public_metadata(prepared)
+
+    package_paths = sorted(
+        {
+            "/".join(PurePosixPath(entry.path).parts[:2])
+            for entry in candidate_files
+            if len(PurePosixPath(entry.path).parts) >= 3
+            and PurePosixPath(entry.path).parts[0] == "plugins"
+        }
+    )
+    for package in package_paths:
+        package_root = prepared / package
+        version_file = package_root / "VERSION"
+        if version_file.is_symlink() or (
+            version_file.exists() and not version_file.is_file()
+        ):
+            fail(f"public package VERSION is unsafe: {package}")
+        version_file.write_text(version + "\n")
+
+        has_binary = any(
+            entry.path.startswith(package + "/bin/") for entry in candidate_files
+        )
+        checksum_file = package_root / "SHA256SUMS"
+        if not has_binary and not checksum_file.exists():
             continue
-        package = checksum_file.parent.relative_to(prepared).as_posix()
+        if checksum_file.is_symlink() or (
+            checksum_file.exists() and not checksum_file.is_file()
+        ):
+            fail(f"public package SHA256SUMS is unsafe: {package}")
         mirrored = [
             entry
             for entry in candidate_files
@@ -496,6 +600,7 @@ def apply_prepared_release(repo: Path, prepared: Path) -> None:
         if target.exists() or target.is_symlink():
             target.unlink()
             remove_empty_parents(target, repo)
+    remove_public_metadata(repo)
     for relative in new_paths:
         source = prepared.joinpath(relative)
         target = repo.joinpath(relative)

@@ -39,6 +39,17 @@ PY
     version)
       printf '9.9.9\n' > "$fixture/VERSION"
       ;;
+    package-version)
+      printf '9.9.9\n' > "$fixture/plugins/faber-cowork/VERSION"
+      ;;
+    package-checksums)
+      printf '%064d  bin/faber-companion_linux_amd64\n' 0 > \
+        "$fixture/plugins/faber-claude-code/SHA256SUMS"
+      ;;
+    retired-metadata)
+      mkdir -p "$fixture/plugins/faber-retired"
+      printf '0.1.4\n' > "$fixture/plugins/faber-retired/VERSION"
+      ;;
     *)
       echo "unknown fixture: $name" >&2
       exit 1
@@ -57,5 +68,8 @@ test_rejection unsafe-state 'unsafe or duplicate path'
 test_rejection symlink 'public repository contains a symbolic link'
 test_rejection mode 'file mode disagrees'
 test_rejection version 'does not contain the public version'
+test_rejection package-version 'public package VERSION disagrees'
+test_rejection package-checksums 'public package SHA256SUMS disagrees'
+test_rejection retired-metadata 'public package metadata does not match current candidate packages'
 
 echo "public release validation tests passed"

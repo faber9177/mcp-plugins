@@ -181,11 +181,15 @@ class CandidatePullTests(unittest.TestCase):
             )
             repo.joinpath("VERSION").write_text(version + "\n")
             repo.joinpath("CANDIDATE").write_text(candidate_id + "\n")
-            repo.joinpath("CANDIDATE_FILES").write_text(
-                pull_candidate.state_document(
-                    [pull_candidate.CandidateFile("plugins/faber-codex/catalog.json", 0o644, True)]
+            files = [
+                pull_candidate.CandidateFile(
+                    "plugins/faber-codex/catalog.json", 0o644, True
                 )
+            ]
+            repo.joinpath("CANDIDATE_FILES").write_text(
+                pull_candidate.state_document(files)
             )
+            pull_candidate.refresh_public_metadata(repo, version, files)
             self.assertEqual(pull_candidate.verify_public_candidate(repo), candidate_id)
             path.write_text("changed")
             with self.assertRaises(SystemExit):
@@ -212,10 +216,12 @@ class CandidatePullTests(unittest.TestCase):
                     [pull_candidate.CandidateFile(old_path, 0o644, False)]
                 )
             )
+            old_package = repo / "plugins/faber-old"
+            old_package.joinpath("VERSION").write_text("0.1.1\n")
+            old_package.joinpath("SHA256SUMS").write_text(
+                f"{pull_candidate.sha256(old_target)}  file.txt\n"
+            )
             repo.joinpath("README.md").write_text("public documentation\n")
-            checksum = repo / "plugins/faber-gemini/SHA256SUMS"
-            checksum.parent.mkdir(parents=True)
-            checksum.write_text("placeholder  catalog.json\n")
             validator = repo / "scripts/validate-public-release.sh"
             validator.parent.mkdir()
             validator.write_text("#!/bin/sh\nexit 0\n")
@@ -237,9 +243,88 @@ class CandidatePullTests(unittest.TestCase):
             self.assertEqual(repo.joinpath("README.md").read_text(), "public documentation\n")
             self.assertIn('"client":"gemini-cli"', repo.joinpath(new_path).read_text())
             self.assertIn('"version":"0.1.2"', repo.joinpath(new_path).read_text())
-            expected_checksum = pull_candidate.sha256(repo.joinpath(new_path))
-            self.assertEqual(checksum.read_text(), f"{expected_checksum}  catalog.json\n")
+            self.assertEqual(
+                repo.joinpath("plugins/faber-gemini/VERSION").read_text(), "0.1.2\n"
+            )
+            self.assertFalse(repo.joinpath("plugins/faber-gemini/SHA256SUMS").exists())
+            self.assertFalse(old_package.joinpath("VERSION").exists())
+            self.assertFalse(old_package.joinpath("SHA256SUMS").exists())
             self.assertEqual(pull_candidate.verify_public_candidate(repo), new_id)
+
+    def test_update_creates_checksums_for_new_companion_package(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            repo = workspace / "repo"
+            payload = workspace / "payload"
+            repo.mkdir()
+            payload.mkdir()
+            old_path = "plugins/faber-old/file.txt"
+            old_content = b"old"
+            old_target = repo / old_path
+            old_target.parent.mkdir(parents=True)
+            old_target.write_bytes(old_content)
+            old_target.chmod(0o644)
+            old_id = pull_candidate.candidate_digest({old_path: old_content})
+            repo.joinpath("VERSION").write_text("0.1.4\n")
+            repo.joinpath("CANDIDATE").write_text(old_id + "\n")
+            repo.joinpath("CANDIDATE_FILES").write_text(
+                pull_candidate.state_document(
+                    [pull_candidate.CandidateFile(old_path, 0o644, False)]
+                )
+            )
+            validator = repo / "scripts/validate-public-release.sh"
+            validator.parent.mkdir()
+            validator.write_text("#!/bin/sh\nexit 0\n")
+            validator.chmod(0o755)
+
+            files = {
+                "plugins/faber-codex/.codex-plugin/plugin.json": b'{"version":"__VERSION__"}',
+                "plugins/faber-codex/bin/faber-companion_linux_amd64": b"binary",
+            }
+            for relative, content in files.items():
+                target = payload / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(content)
+            candidate_id = pull_candidate.candidate_digest(files)
+            changed, version = pull_candidate.update_repository(
+                repo,
+                payload,
+                {
+                    "plugins/faber-codex/.codex-plugin/plugin.json": 0o644,
+                    "plugins/faber-codex/bin/faber-companion_linux_amd64": 0o755,
+                },
+                candidate_id,
+            )
+
+            self.assertTrue(changed)
+            self.assertEqual(version, "0.1.5")
+            self.assertEqual(repo.joinpath("plugins/faber-codex/VERSION").read_text(), "0.1.5\n")
+            checksums = repo.joinpath("plugins/faber-codex/SHA256SUMS").read_text()
+            self.assertIn(".codex-plugin/plugin.json", checksums)
+            self.assertIn("bin/faber-companion_linux_amd64", checksums)
+            self.assertEqual(pull_candidate.verify_public_candidate(repo), candidate_id)
+
+            package_version = repo / "plugins/faber-codex/VERSION"
+            package_version.write_text("9.9.9\n")
+            with self.assertRaises(SystemExit):
+                pull_candidate.verify_public_candidate(repo)
+            package_version.write_text("0.1.5\n")
+
+            checksum_file = repo / "plugins/faber-codex/SHA256SUMS"
+            checksum_file.write_text("0" * 64 + "  bin/faber-companion_linux_amd64\n")
+            with self.assertRaises(SystemExit):
+                pull_candidate.verify_public_candidate(repo)
+            checksum_file.write_text(checksums)
+
+            retired_version = repo / "plugins/faber-retired/VERSION"
+            retired_version.parent.mkdir()
+            retired_version.write_text("0.1.5\n")
+            with self.assertRaises(SystemExit):
+                pull_candidate.verify_public_candidate(repo)
+
+    def test_candidate_limits_allow_larger_extracted_plugin_set(self) -> None:
+        self.assertEqual(pull_candidate.MAX_DOWNLOAD_BYTES, 64 * 1024 * 1024)
+        self.assertEqual(pull_candidate.MAX_EXTRACTED_BYTES, 96 * 1024 * 1024)
 
     def test_update_rejects_collision_with_public_owned_file(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -299,11 +384,11 @@ class CandidatePullTests(unittest.TestCase):
             candidate_id = pull_candidate.candidate_digest({relative: content})
             repo.joinpath("VERSION").write_text("0.1.1\n")
             repo.joinpath("CANDIDATE").write_text(candidate_id + "\n")
+            files = [pull_candidate.CandidateFile(relative, 0o644, False)]
             repo.joinpath("CANDIDATE_FILES").write_text(
-                pull_candidate.state_document(
-                    [pull_candidate.CandidateFile(relative, 0o644, False)]
-                )
+                pull_candidate.state_document(files)
             )
+            pull_candidate.refresh_public_metadata(repo, "0.1.1", files)
             repo.joinpath(".gitignore").write_text(relative + "\n")
             subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, check=True)
             subprocess.run(["git", "add", "."], cwd=repo, check=True)
