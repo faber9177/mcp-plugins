@@ -1,0 +1,38 @@
+{
+  "name": "faber-codex",
+  "version": "0.1.6",
+  "description": "Publish private artifacts and recall team knowledge from Codex.",
+  "author": {
+    "name": "Faber",
+    "url": "https://www.getfaber.app"
+  },
+  "homepage": "https://www.getfaber.app",
+  "repository": "https://github.com/getfaber/mcp-plugins",
+  "license": "Apache-2.0",
+  "keywords": [
+    "artifacts",
+    "knowledge",
+    "mcp",
+    "publishing",
+    "context"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Faber for Codex",
+    "shortDescription": "Publish and recall durable AI artifacts",
+    "longDescription": "Save reviewed outputs from Codex as private, versioned Faber artifacts and retrieve approved team knowledge for reuse.",
+    "developerName": "Faber",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://www.getfaber.app",
+    "defaultPrompt": [
+      "Publish this artifact to Faber",
+      "Find relevant prior work in Faber",
+      "Get Faber context before I start"
+    ]
+  }
+}

@@ -15,7 +15,7 @@ Use Faber as a durable artifact library for knowledge your team can reuse.
 4. Optimize for a calm, high-signal reading experience: meaningful whitespace, readable typography, accessible contrast, restrained color, clear callouts for risks or decisions, scannable summaries, and responsive layouts. Use tables, timelines, diagrams, or comparisons when they clarify the material.
 5. Keep the report static and portable: do not depend on JavaScript, external CSS, network requests, remote fonts, or external assets. Never put secrets, raw transcripts, or private session details in the artifact or private session knowledge.
 6. Provide private session knowledge with non-empty `Outcome`, `Decisions and Rationale`, `Reusable Knowledge`, and `Verification` headings.
-7. Publish through the product-specific file flow below. Reports are private to the publishing user by default.
+7. Publish through the content source declared by the active `faber_publish_artifact` tool schema. Reports are private to the publishing user by default.
 
 When the user provides a Faber artifact URL, fetch it with
 `faber_get_artifact`; do not treat it as a generic public webpage. Honor any
@@ -25,29 +25,18 @@ Pass the exact model identifier when known. Use `update_of` for a new version of
 the same artifact. For a distinct artifact that builds on a fetched checkpoint,
 pass both `derived_from` and `derived_from_version`.
 
-### Publishing by file reference
+### Publishing
 
 Publish one regular UTF-8 file. An explicit request to publish establishes
 consent for that artifact, so do not ask for another Faber-specific
 confirmation. Publishing remains an external write in native host approval UI;
 do not suppress that approval.
 
-On Claude Code, put a newly generated artifact in an owner-only
-`~/.faber/staging` directory, write it exactly once, and call
-`faber_publish_artifact` with its absolute path in `content_ref`. Faber accepts
-the file for reliable background delivery. For an
-existing artifact that the user identifies by name or path, resolve and pass
-the absolute path directly when it is inside the active workspace. Do not copy,
-rewrite, or delete the existing file. If it is outside the active workspace,
-explain that it must be moved into the workspace before Faber can publish it.
-If several files plausibly match, show concise relative paths and ask the user
-which one they mean. Never send the artifact body in an MCP argument.
-
-On Cowork, read the completed UTF-8 artifact and call
-`faber_publish_artifact` once with its exact source in `content`. Inline
-artifact content is limited to 1 MiB of UTF-8 bytes. If it is larger, recommend
-the Faber web app instead of truncating or splitting it without the user's
-direction.
+Call `faber_publish_artifact` using the content source declared by its active
+tool schema. Do not invent, substitute, or convert between content-source
+fields. Follow that field's description for file eligibility, staging,
+workspace boundaries, byte limits, and oversize guidance. Never truncate or
+split an artifact without the user's direction.
 
 Do not publish directories, symlinks, credential locations, or files containing
 secrets. Self-contained HTML is the default; other single-file text artifacts
@@ -71,14 +60,10 @@ a new version.
 
 ## Authentication
 
-On Claude Code, call `faber_connect` when setup is requested or another Faber
-tool reports that sign-in is required. The tool opens a browser only when the
-existing grant cannot be reused. The first ordinary Faber tool call can also
-start this connection flow. On Cowork, use Claude's connector authentication
-prompt.
-
-Both flows can authorize the same Faber account and workspace. Never ask the
-user to paste an API key.
+When `faber_connect` is available, call it when setup is requested or another
+Faber tool reports that sign-in is required. Otherwise, follow the host's
+connector authentication prompt. Both flows can authorize the same Faber
+account and workspace. Never ask the user to paste an API key.
 
 Before publishing, Faber checks the account's available workspaces. When there
 is more than one, ask which named workspace should receive the artifact and

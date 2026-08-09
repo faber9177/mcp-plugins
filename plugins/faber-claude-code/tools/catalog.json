@@ -84,7 +84,7 @@
         "type": "object",
         "properties": {
           "content_ref": {
-            "description": "Absolute path to one regular UTF-8 artifact file to publish. Limited to 5 MiB.",
+            "description": "Absolute path to one local UTF-8 artifact file of at most 5 MiB. For a newly generated artifact, create an owner-only ~/.faber/staging directory and write the file there exactly once. For an existing artifact, pass it directly only when it is inside the active workspace; do not copy, rewrite, or delete it. Do not pass directories, symlinks, credential locations, or files containing secrets.",
             "type": "string",
             "minLength": 1,
             "maxLength": 4096

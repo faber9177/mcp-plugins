@@ -1,0 +1,20 @@
+{
+  "name": "faber-mcp-plugins",
+  "interface": {
+    "displayName": "Faber"
+  },
+  "plugins": [
+    {
+      "name": "faber-codex",
+      "source": {
+        "source": "local",
+        "path": "./plugins/faber-codex"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

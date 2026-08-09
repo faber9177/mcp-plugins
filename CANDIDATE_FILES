@@ -2,6 +2,11 @@
   "format_version": 1,
   "files": [
     {
+      "path": ".agents/plugins/marketplace.json",
+      "mode": "0644",
+      "version_stamped": false
+    },
+    {
       "path": ".claude-plugin/marketplace.json",
       "mode": "0644",
       "version_stamped": false
@@ -48,6 +53,51 @@
     },
     {
       "path": "plugins/faber-claude-code/tools/catalog.json",
+      "mode": "0644",
+      "version_stamped": false
+    },
+    {
+      "path": "plugins/faber-codex/.codex-plugin/plugin.json",
+      "mode": "0644",
+      "version_stamped": true
+    },
+    {
+      "path": "plugins/faber-codex/.mcp.json",
+      "mode": "0644",
+      "version_stamped": false
+    },
+    {
+      "path": "plugins/faber-codex/bin/faber-companion_darwin_amd64",
+      "mode": "0755",
+      "version_stamped": false
+    },
+    {
+      "path": "plugins/faber-codex/bin/faber-companion_darwin_arm64",
+      "mode": "0755",
+      "version_stamped": false
+    },
+    {
+      "path": "plugins/faber-codex/bin/faber-companion_linux_amd64",
+      "mode": "0755",
+      "version_stamped": false
+    },
+    {
+      "path": "plugins/faber-codex/bin/faber-companion_linux_arm64",
+      "mode": "0755",
+      "version_stamped": false
+    },
+    {
+      "path": "plugins/faber-codex/scripts/launch-companion.sh",
+      "mode": "0755",
+      "version_stamped": false
+    },
+    {
+      "path": "plugins/faber-codex/skills/faber/SKILL.md",
+      "mode": "0644",
+      "version_stamped": false
+    },
+    {
+      "path": "plugins/faber-codex/tools/catalog.json",
       "mode": "0644",
       "version_stamped": false
     },
