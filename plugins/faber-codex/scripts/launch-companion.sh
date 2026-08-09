@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-plugin_root=${PLUGIN_ROOT:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)}
+plugin_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 version=$(tr -d '[:space:]' < "$plugin_root/VERSION")
 
 case "$(uname -s)" in
