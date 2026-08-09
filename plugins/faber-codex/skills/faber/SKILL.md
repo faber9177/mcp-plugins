@@ -15,7 +15,11 @@ Use Faber as a durable artifact library for knowledge your team can reuse.
 4. Optimize for a calm, high-signal reading experience: meaningful whitespace, readable typography, accessible contrast, restrained color, clear callouts for risks or decisions, scannable summaries, and responsive layouts. Use tables, timelines, diagrams, or comparisons when they clarify the material.
 5. Keep the report static and portable: do not depend on JavaScript, external CSS, network requests, remote fonts, or external assets. Never put secrets, raw transcripts, or private session details in the artifact or private session knowledge.
 6. Provide private session knowledge with non-empty `Outcome`, `Decisions and Rationale`, `Reusable Knowledge`, and `Verification` headings.
-7. Publish through the content source declared by the active `faber_publish_artifact` tool schema. Reports are private to the publishing user by default.
+7. Publish through the content source declared by the `faber_publish_artifact` tool supplied alongside this skill. Reports are private to the publishing user by default.
+
+Use only the Faber tools supplied alongside this skill and follow their schemas.
+If those tools are unavailable or unhealthy, report that clearly and stop; do
+not substitute another app, connector, or similarly named tool.
 
 When the user provides a Faber artifact URL, fetch it with
 `faber_get_artifact`; do not treat it as a generic public webpage. Honor any
@@ -32,9 +36,9 @@ consent for that artifact, so do not ask for another Faber-specific
 confirmation. Publishing remains an external write in native host approval UI;
 do not suppress that approval.
 
-Call `faber_publish_artifact` using the content source declared by its active
-tool schema. Do not invent, substitute, or convert between content-source
-fields. Follow that field's description for file eligibility, staging,
+Call `faber_publish_artifact` using the content source declared by the tool
+supplied alongside this skill. Do not invent, substitute, or convert between
+content-source fields. Follow that field's description for file eligibility, staging,
 workspace boundaries, byte limits, and oversize guidance. Never truncate or
 split an artifact without the user's direction.
 

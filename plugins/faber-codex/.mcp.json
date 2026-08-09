@@ -3,9 +3,10 @@
     "faber": {
       "command": "sh",
       "args": [
-        "-c",
-        "exec \"${PLUGIN_ROOT}/scripts/launch-companion.sh\" mcp"
-      ]
+        "./scripts/launch-companion.sh",
+        "mcp"
+      ],
+      "cwd": "."
     }
   }
 }

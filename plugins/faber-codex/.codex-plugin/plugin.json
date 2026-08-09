@@ -1,6 +1,6 @@
 {
   "name": "faber-codex",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Publish private artifacts and recall team knowledge from Codex.",
   "author": {
     "name": "Faber",
