@@ -7,13 +7,22 @@ knowledge capture, and an encrypted offline queue.
 ## Install
 
 ```bash
-claude plugin marketplace add faber9177/mcp-plugins
+claude plugin marketplace add getfaber/mcp-plugins
 claude plugin install faber-claude-code@faber-mcp-plugins
 ```
 
 Ask Claude to set up Faber, then complete the browser sign-in. Existing valid
 credentials are reused, and ordinary plugin upgrades preserve credentials,
 queued work, and plugin data.
+
+## Upgrade
+
+```bash
+claude plugin marketplace update faber-mcp-plugins
+claude plugin update faber-claude-code@faber-mcp-plugins
+```
+
+Restart Claude Code to load the updated plugin version.
 
 ## Supported platforms
 
