@@ -28,15 +28,13 @@
     {
       "name": "faber_get_artifact",
       "title": "Get artifact source from Faber",
-      "description": "Fetch one accessible version of a Faber artifact with its source and shareable provenance. Private session knowledge is not returned. Use update_of when revising the same artifact and derived_from for distinct work.",
+      "description": "Fetch one accessible version of a Faber artifact with its source and shareable provenance. Accepts a UUID or pasted Faber URL; a URL with ?version=N always fetches that exact checkpoint. Private session knowledge is not returned. Use update_of when revising the same artifact and derived_from plus derived_from_version for distinct work.",
       "inputSchema": {
         "type": "object",
         "properties": {
           "id": {
             "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-            "description": "Artifact ID from faber_search or a Faber URL."
+            "description": "Artifact UUID from Faber search, or a pasted Faber artifact URL."
           },
           "version": {
             "description": "Specific version; omit for current.",
@@ -145,6 +143,12 @@
             "type": "string",
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "derived_from_version": {
+            "description": "Exact parent checkpoint version consumed when creating derived work.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
           },
           "workspace_name": {
             "description": "Exact workspace name selected by the user when Faber asks where to publish.",
