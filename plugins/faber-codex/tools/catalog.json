@@ -82,7 +82,7 @@
         "type": "object",
         "properties": {
           "content_ref": {
-            "description": "Absolute path to one local UTF-8 artifact file of at most 5 MiB. For a newly generated artifact, create ~/.faber/staging with mode 0700 and write directly to a uniquely named file there with mode 0600; do not first create or copy it elsewhere. Faber staging is reserved for generated temporary files, which are deleted after Faber accepts them for publication. For an existing artifact outside staging, pass its original path directly from any local directory and do not copy, rewrite, or delete it. Do not pass directories, symlinks, credential locations, or files containing secrets.",
+            "description": "Absolute path to one local UTF-8 artifact file of at most 5 MiB. For a newly generated artifact, default to a uniquely named file under ~/.faber/staging. For an existing artifact, pass its original path directly from any local directory. Faber takes a private snapshot of the file contents but never creates a local copy, moves, rewrites, changes permissions on, or deletes the source file. Do not pass directories, symlinks, credential locations, or files containing secrets.",
             "type": "string",
             "minLength": 1,
             "maxLength": 4096
