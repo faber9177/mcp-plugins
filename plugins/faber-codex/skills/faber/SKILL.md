@@ -38,9 +38,16 @@ do not suppress that approval.
 
 Call `faber_publish_artifact` using the content source declared by the tool
 supplied alongside this skill. Do not invent, substitute, or convert between
-content-source fields. Follow that field's description for file eligibility, staging,
-workspace boundaries, byte limits, and oversize guidance. Never truncate or
-split an artifact without the user's direction.
+content-source fields. When the schema declares `content_ref`, write a newly
+generated artifact directly to a uniquely named file under `~/.faber/staging`.
+Faber deletes staged files after accepting them. Pass existing files directly
+from their current path; never copy them into staging or modify them.
+
+Keep `distilled_knowledge` as bounded inline Markdown metadata when the schema
+declares it; do not write it into the artifact file or pass it through
+`content_ref`. Follow the content-source field's remaining description for file
+eligibility, byte limits, and oversize guidance. Never
+truncate or split an artifact without the user's direction.
 
 Do not publish directories, symlinks, credential locations, or files containing
 secrets. Self-contained HTML is the default; other single-file text artifacts
