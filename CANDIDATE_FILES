@@ -52,6 +52,16 @@
       "version_stamped": false
     },
     {
+      "path": "plugins/faber-claude-code/skills/faber/assets/report-template.html",
+      "mode": "0644",
+      "version_stamped": false
+    },
+    {
+      "path": "plugins/faber-claude-code/skills/faber/references/html-publishing.md",
+      "mode": "0644",
+      "version_stamped": false
+    },
+    {
       "path": "plugins/faber-claude-code/tools/catalog.json",
       "mode": "0644",
       "version_stamped": false
@@ -97,6 +107,16 @@
       "version_stamped": false
     },
     {
+      "path": "plugins/faber-codex/skills/faber/assets/report-template.html",
+      "mode": "0644",
+      "version_stamped": false
+    },
+    {
+      "path": "plugins/faber-codex/skills/faber/references/html-publishing.md",
+      "mode": "0644",
+      "version_stamped": false
+    },
+    {
       "path": "plugins/faber-codex/tools/catalog.json",
       "mode": "0644",
       "version_stamped": false
@@ -118,6 +138,16 @@
     },
     {
       "path": "plugins/faber-cowork/skills/faber/SKILL.md",
+      "mode": "0644",
+      "version_stamped": false
+    },
+    {
+      "path": "plugins/faber-cowork/skills/faber/assets/report-template.html",
+      "mode": "0644",
+      "version_stamped": false
+    },
+    {
+      "path": "plugins/faber-cowork/skills/faber/references/html-publishing.md",
       "mode": "0644",
       "version_stamped": false
     }

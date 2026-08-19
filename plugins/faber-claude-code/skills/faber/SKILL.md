@@ -10,12 +10,11 @@ Use Faber as a durable artifact library for knowledge your team can reuse.
 ## Before publishing
 
 1. Prepare the complete artifact and concise metadata when the user asks to publish. Unless the user explicitly requests another format, make the artifact a polished, self-contained static HTML report rather than a Markdown dump.
-2. Shape the HTML around the work itself: lead with a clear title and short orientation, then use a strong heading hierarchy, concise sections, and the most useful evidence, decisions, outcomes, and next steps. Preserve all substantive facts; never invent results or hide important caveats just to improve presentation.
-3. Use semantic HTML (`header`, `main`, `nav`, `aside`, `section`, headings, lists, tables, and code blocks) and tasteful inline styling when it improves comprehension. Add anchored navigation when the report has enough sections to benefit from it; omit it for short artifacts. Make navigation collapse or stack naturally on narrow screens.
-4. Optimize for a calm, high-signal reading experience: meaningful whitespace, readable typography, accessible contrast, restrained color, clear callouts for risks or decisions, scannable summaries, and responsive layouts. Use tables, timelines, diagrams, or comparisons when they clarify the material.
-5. Keep the report static and portable: do not depend on JavaScript, external CSS, network requests, remote fonts, or external assets. Never put secrets, raw transcripts, or private session details in the artifact or private session knowledge.
-6. Provide private session knowledge with non-empty `Outcome`, `Decisions and Rationale`, `Reusable Knowledge`, and `Verification` headings.
-7. Publish through the content source declared by the `faber_publish_artifact` tool supplied alongside this skill. Reports are private to the publishing user by default.
+2. For HTML, follow `references/html-publishing.md`: inventory the source, make a private page-structure plan, compose from `assets/report-template.html`, validate, and only then publish. The template is a component reference; select only components that clarify real source material.
+3. Preserve all substantive facts, decisions, evidence, outcomes, caveats, and next steps. Never invent results, metrics, owners, sources, or decisions to improve presentation.
+4. Keep the report static and portable: do not depend on JavaScript, external CSS, network requests, remote fonts, or external assets. Never put secrets, raw transcripts, or private session details in the artifact or private session knowledge.
+5. Provide private session knowledge with non-empty `Outcome`, `Decisions and Rationale`, `Reusable Knowledge`, and `Verification` headings.
+6. Publish through the content source declared by the `faber_publish_artifact` tool supplied alongside this skill. Reports are private to the publishing user by default.
 
 Use only the Faber tools supplied alongside this skill and follow their schemas.
 If those tools are unavailable or unhealthy, report that clearly and stop; do
